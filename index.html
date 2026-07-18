@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f4ee">
+  <title>うちログ｜家庭の小さな記録</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <section id="authLoadingScreen" class="auth-screen">
+    <div class="auth-card"><p class="eyebrow">UCHILOG</p><h1>うちログ</h1><p id="authLoadingMessage">認証状態を確認中…</p></div>
+  </section>
+
+  <section id="loginScreen" class="auth-screen hidden">
+    <div class="auth-card">
+      <p class="eyebrow">SHARED HOME LOG</p><h1>うちログ</h1>
+      <p class="helper">夫婦で家の記録を共有します。許可されたGoogleアカウントでログインしてください。</p>
+      <button id="googleSignIn" class="primary-button full">Googleでログイン</button>
+      <p id="loginError" class="error-message hidden"></p>
+    </div>
+  </section>
+
+  <section id="unauthorizedScreen" class="auth-screen hidden">
+    <div class="auth-card">
+      <p class="eyebrow">ACCESS REQUIRED</p><h1>利用許可が必要です</h1>
+      <p>このアカウントは利用を許可されていません。<br>管理者にアカウントの登録を依頼してください。</p>
+      <dl class="account-details">
+        <div><dt>表示名</dt><dd id="deniedName">—</dd></div>
+        <div><dt>メール</dt><dd id="deniedEmail">—</dd></div>
+        <div><dt>UID</dt><dd id="deniedUid">—</dd></div>
+      </dl>
+      <div class="dialog-actions">
+        <button id="copyUid" class="secondary-button">UIDをコピー</button>
+        <button id="deniedSignOut" class="primary-button">ログアウト</button>
+      </div>
+      <p id="copyStatus" class="helper"></p>
+    </div>
+  </section>
+
+  <div id="appShell" class="hidden">
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">HOME LOG</p>
+      <h1>うちログ</h1>
+      <p class="subtitle">家の「いつだっけ？」を、さくっと残す。</p>
+    </div>
+    <div class="header-actions">
+      <div class="user-summary"><span id="currentUserName"></span><button id="signOut" class="text-button">ログアウト</button></div>
+      <button id="openQuickAdd" class="icon-button" aria-label="クイック登録">＋</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="syncStatus" class="sync-status" role="status">データ取得中…</div>
+    <section class="hero-card">
+      <div>
+        <p class="hero-label">今日の家</p>
+        <h2 id="todayLabel"></h2>
+      </div>
+      <div class="hero-stats">
+        <div><strong id="shoppingCount">0</strong><span>買うもの</span></div>
+        <div><strong id="dueCount">0</strong><span>そろそろ</span></div>
+        <div><strong id="todayCount">0</strong><span>今日の記録</span></div>
+      </div>
+    </section>
+
+    <nav class="tabbar" aria-label="メインメニュー">
+      <button class="tab-button active" data-view="home">ホーム</button>
+      <button class="tab-button" data-view="shopping">買い物</button>
+      <button class="tab-button" data-view="chores">家事</button>
+      <button class="tab-button" data-view="history">履歴</button>
+    </nav>
+
+    <section id="view-home" class="view active">
+      <section class="section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">QUICK ADD</p>
+            <h2>ワンタップ記録</h2>
+            <p class="section-note">固定3項目＋よく使う項目を最大3件</p>
+          </div>
+          <button class="text-button" id="manageFavorites">編集</button>
+        </div>
+        <div id="favoriteGrid" class="favorite-grid"></div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">TO BUY</p>
+            <h2>買いたいもの</h2>
+          </div>
+          <button class="text-button" data-open-form="shopping-want">追加</button>
+        </div>
+        <div id="homeShoppingList" class="card-list"></div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">DUE SOON</p>
+            <h2>そろそろやること</h2>
+          </div>
+        </div>
+        <div id="dueList" class="card-list"></div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">RECENT</p>
+            <h2>最近の記録</h2>
+          </div>
+        </div>
+        <div id="recentList" class="timeline"></div>
+      </section>
+    </section>
+
+    <section id="view-shopping" class="view">
+      <section class="action-grid">
+        <button class="action-card" data-open-form="shopping-want"><span>🛒</span><strong>買いたいもの</strong><small>買い物リストに追加</small></button>
+        <button class="action-card" data-open-form="shopping-bought"><span>✅</span><strong>買ったもの</strong><small>購入済みとして記録</small></button>
+        <button class="action-card" id="openReceipt"><span>🧾</span><strong>レシートOCR</strong><small>撮影して文字を読む</small></button>
+      </section>
+
+      <section class="section-block">
+        <div class="section-heading"><div><p class="eyebrow">SHOPPING LIST</p><h2>買い物リスト</h2></div></div>
+        <div id="shoppingList" class="card-list"></div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-heading"><div><p class="eyebrow">PURCHASED</p><h2>最近買ったもの</h2></div></div>
+        <div id="purchasedList" class="timeline"></div>
+      </section>
+    </section>
+
+    <section id="view-chores" class="view">
+      <section class="category-grid" id="categoryGrid"></section>
+      <section class="section-block">
+        <div class="section-heading"><div><p class="eyebrow">LAST DONE</p><h2>最後にやった日</h2></div></div>
+        <div id="lastDoneList" class="card-list"></div>
+      </section>
+    </section>
+
+    <section id="view-history" class="view">
+      <section class="section-block">
+        <div class="section-heading"><div><p class="eyebrow">ALL LOGS</p><h2>すべての履歴</h2></div><button id="exportData" class="text-button">書き出し</button></div>
+        <div class="filter-row" id="historyFilters"></div>
+        <div id="historyList" class="timeline"></div>
+      </section>
+    </section>
+  </main>
+  </div>
+
+  <dialog id="entryDialog" class="app-dialog">
+    <form method="dialog" id="entryForm">
+      <div class="dialog-header">
+        <div><p class="eyebrow" id="formEyebrow">ADD</p><h2 id="formTitle">記録を追加</h2></div>
+        <button class="icon-button small" value="cancel" aria-label="閉じる">×</button>
+      </div>
+      <input type="hidden" id="entryType">
+      <input type="hidden" id="entryEditId">
+      <label>内容<input id="entryText" type="text" placeholder="例：ヨーグルト" required></label>
+      <label id="categoryWrap">カテゴリ<select id="entryCategory"></select></label>
+      <label>日付<input id="entryDate" type="date" required></label>
+      <label id="intervalWrap">目安の日数（任意）<input id="entryInterval" type="number" min="1" placeholder="例：30"></label>
+      <label>メモ（任意）<textarea id="entryNote" rows="3" placeholder="補足があれば"></textarea></label>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary-button">キャンセル</button>
+        <button type="submit" class="primary-button">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="receiptDialog" class="app-dialog wide">
+    <form method="dialog" id="receiptForm">
+      <div class="dialog-header">
+        <div><p class="eyebrow">RECEIPT OCR</p><h2>レシートを読み取る</h2></div>
+        <button class="icon-button small" value="cancel" aria-label="閉じる">×</button>
+      </div>
+      <p class="helper">撮影または画像を選択すると、ブラウザ内でOCRします。読み取り結果を見ながら商品名を入力してください。</p>
+      <input id="receiptInput" type="file" accept="image/*" capture="environment">
+      <img id="receiptPreview" class="receipt-preview hidden" alt="レシートプレビュー">
+      <button type="button" id="runOcr" class="primary-button full">文字を読み取る</button>
+      <div id="ocrStatus" class="status-box">画像を選択してください。</div>
+      <label>OCR結果<textarea id="ocrText" rows="9" placeholder="ここに読み取り結果が表示されます"></textarea></label>
+      <div class="inline-add">
+        <input id="receiptItem" type="text" placeholder="商品名を入力">
+        <button type="button" id="addReceiptItem" class="secondary-button">追加</button>
+      </div>
+      <div id="receiptItems" class="chips"></div>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary-button">閉じる</button>
+        <button type="button" id="saveReceiptItems" class="primary-button">購入済みで保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="favoritesDialog" class="app-dialog">
+    <form method="dialog" id="favoritesForm">
+      <div class="dialog-header">
+        <div><p class="eyebrow">QUICK ITEMS</p><h2>ワンタップ項目を編集</h2></div>
+        <button class="icon-button small" value="cancel" aria-label="閉じる">×</button>
+      </div>
+      <p id="favoriteLimitNote" class="helper"></p>
+      <div id="favoritesEditor" class="favorites-editor"></div>
+      <div class="inline-add">
+        <input id="newFavoriteText" type="text" placeholder="例：トイレ掃除">
+        <select id="newFavoriteCategory"></select>
+        <button type="button" id="addFavorite" class="secondary-button">追加</button>
+      </div>
+      <div class="dialog-actions"><button value="cancel" class="primary-button full">完了</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="migrationDialog" class="app-dialog">
+    <form method="dialog">
+      <div class="dialog-header">
+        <div><p class="eyebrow">DATA MIGRATION</p><h2>端末データの移行</h2></div>
+      </div>
+      <p class="helper">この端末に保存されている記録を、共有データへ移行しますか？</p>
+      <p id="migrationSummary" class="status-box"></p>
+      <p id="migrationError" class="error-message hidden"></p>
+      <div class="dialog-actions">
+        <button id="skipMigration" type="button" class="secondary-button">今はしない</button>
+        <button id="runMigration" type="button" class="primary-button">移行する</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="emptyTemplate"><div class="empty-state"><span>○</span><p>まだ記録がありません</p></div></template>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
