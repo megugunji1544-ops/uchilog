@@ -1,4 +1,4 @@
-# うちログ Firebase共有版 v1.1.1
+# うちログ Firebase共有版 v1.1.3
 
 夫婦2人で家事・買い物をリアルタイム共有する静的Webアプリです。Firebase AuthenticationのGoogleログインとCloud Firestoreを使用します。
 
@@ -164,14 +164,14 @@ firebase deploy --only hosting,firestore:rules
 
 ### GitHub Pagesへ反映する場合
 
-1. ZIPを展開し、`uchilog_app_v1.1.1` 内の公開ファイルをGitHub Pagesの公開元へ上書き
+1. ZIPを展開し、`uchilog_app_v1.1.3` 内の公開ファイルをGitHub Pagesの公開元へ上書き
 2. `firebase-config.js` が本番設定になっていることを確認
 3. Gitで変更をコミットしてpush
 4. GitHubの「Settings」→「Pages」でデプロイ完了を確認
 5. Firebase AuthenticationのAuthorized domainsに `<ユーザー名>.github.io` を登録
 6. iPhone Safariでページを一度閉じて開き直す
 
-Service Workerのキャッシュ名は `uchilog-v1.1.1` です。更新版はインストール時に待機をスキップし、activate時に旧キャッシュを削除して既存ページを制御します。それでも旧画面が残る場合はページを閉じて開き直してください。
+Service Workerのキャッシュ名は `uchilog-v1.1.3` です。更新版はインストール時に待機をスキップし、activate時に旧キャッシュを削除して既存ページを制御します。それでも旧画面が残る場合はページを閉じて開き直してください。
 
 ## 動作確認
 

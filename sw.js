@@ -1,4 +1,4 @@
-const CACHE='uchilog-v1.1.1';
+const CACHE='uchilog-v1.1.3';
 const ASSETS=['./','./index.html','./styles.css','./app.js','./repositories.js','./firebase-config.js','./manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));

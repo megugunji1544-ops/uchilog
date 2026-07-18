@@ -158,7 +158,7 @@
     <form method="dialog" id="entryForm">
       <div class="dialog-header">
         <div><p class="eyebrow" id="formEyebrow">ADD</p><h2 id="formTitle">記録を追加</h2></div>
-        <button class="icon-button small" value="cancel" aria-label="閉じる">×</button>
+        <button type="button" class="icon-button small" data-close-dialog="entryDialog" aria-label="閉じる">×</button>
       </div>
       <input type="hidden" id="entryType">
       <input type="hidden" id="entryEditId">
@@ -168,7 +168,7 @@
       <label id="intervalWrap">目安の日数（任意）<input id="entryInterval" type="number" min="1" placeholder="例：30"></label>
       <label>メモ（任意）<textarea id="entryNote" rows="3" placeholder="補足があれば"></textarea></label>
       <div class="dialog-actions">
-        <button value="cancel" class="secondary-button">キャンセル</button>
+        <button type="button" class="secondary-button" data-close-dialog="entryDialog">キャンセル</button>
         <button type="submit" class="primary-button">保存</button>
       </div>
     </form>

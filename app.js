@@ -139,7 +139,7 @@ function renderShopping(){
     const el=$(id);el.innerHTML="";wants.slice(0,id==="homeShoppingList"?5:999).forEach(x=>el.appendChild(shoppingCard(x)));if(!el.children.length)el.appendChild(emptyNode());
   });
   const bought=$("purchasedList");bought.innerHTML="";
-  shopping().filter(x=>x.action==="bought").slice(0,20).forEach(x=>bought.appendChild(timelineNode(x)));
+  shopping().filter(x=>x.action==="bought").slice(0,20).forEach(x=>bought.appendChild(timelineNode(x,true)));
   if(!bought.children.length)bought.appendChild(emptyNode());
 }
 function getLatestByTask(){
@@ -150,7 +150,7 @@ function renderDue(){
   const el=$("dueList");el.innerHTML="";
   getDueItems().slice(0,8).forEach(e=>{
     const over=daysSince(e.performedAt)-e.interval,div=document.createElement("div");div.className="list-card";
-    div.innerHTML=`<div class="list-card-main"><div class="badge-icon">${categories[e.category]?.icon||"○"}</div><div><h3>${escapeHtml(e.item)}</h3><p>${daysSince(e.performedAt)}日前・目安${e.interval}日${over>0?`（${over}日超過）`:""}</p></div></div><button class="mini-button" data-repeat="${e.id}">今やった</button>`;
+    div.innerHTML=`<div class="list-card-main"><div class="badge-icon">${categories[e.category]?.icon||"○"}</div><div><h3>${escapeHtml(e.item)}</h3><p>${daysSince(e.performedAt)}日前・目安${e.interval}日${over>0?`（${over}日超過）`:""}</p></div></div><div class="card-actions"><button class="mini-button" data-repeat="${e.id}">今やった</button><button class="mini-button danger" data-delete-entry="${e.id}">削除</button></div>`;
     el.appendChild(div);
   });if(!el.children.length)el.appendChild(emptyNode());
 }
@@ -159,7 +159,7 @@ function timelineNode(e,withDelete=false){
   div.innerHTML=`<div class="badge-icon">${categories[e.category]?.icon||"○"}</div><div><h3>${escapeHtml(e.item)}</h3><p>${categories[e.category]?.label||""}${e.note?"・"+escapeHtml(e.note):""}${e.createdByName?"・"+escapeHtml(e.createdByName):""}</p></div><div class="time">${fmtDate(e.performedAt)}${withDelete?`<br><button class="text-button" data-edit="${e.id}">編集</button><button class="text-button" data-delete-entry="${e.id}">削除</button>`:""}</div>`;
   return div;
 }
-function renderEntries(){const el=$("recentList");el.innerHTML="";entries().slice(0,8).forEach(e=>el.appendChild(timelineNode(e)));if(!el.children.length)el.appendChild(emptyNode())}
+function renderEntries(){const el=$("recentList");el.innerHTML="";entries().slice(0,8).forEach(e=>el.appendChild(timelineNode(e,true)));if(!el.children.length)el.appendChild(emptyNode())}
 function renderCategories(){
   const el=$("categoryGrid");el.innerHTML="";
   Object.entries(categories).filter(([key])=>key!=="shopping").forEach(([key,c])=>{
@@ -170,7 +170,7 @@ function renderLastDone(){
   const el=$("lastDoneList");el.innerHTML="";
   getLatestByTask().slice(0,30).forEach(e=>{
     const div=document.createElement("div");div.className="list-card";
-    div.innerHTML=`<div class="list-card-main"><div class="badge-icon">${categories[e.category]?.icon||"○"}</div><div><h3>${escapeHtml(e.item)}</h3><p>${fmtDate(e.performedAt)}・${daysSince(e.performedAt)}日前${e.interval?`・目安${e.interval}日`:""}</p></div></div><button class="mini-button" data-repeat="${e.id}">今やった</button>`;el.appendChild(div);
+    div.innerHTML=`<div class="list-card-main"><div class="badge-icon">${categories[e.category]?.icon||"○"}</div><div><h3>${escapeHtml(e.item)}</h3><p>${fmtDate(e.performedAt)}・${daysSince(e.performedAt)}日前${e.interval?`・目安${e.interval}日`:""}</p></div></div><div class="card-actions"><button class="mini-button" data-repeat="${e.id}">今やった</button><button class="mini-button danger" data-delete-entry="${e.id}">削除</button></div>`;el.appendChild(div);
   });if(!el.children.length)el.appendChild(emptyNode());
 }
 function renderHistory(){
@@ -222,9 +222,10 @@ $("entryForm").addEventListener("submit",async event=>{
 document.body.addEventListener("click",async event=>{
   const target=event.target;
   try{
+    if(target.dataset.closeDialog){$(target.dataset.closeDialog)?.close();return}
     if(target.dataset.buy)await markBought(target.dataset.buy);
     if(target.dataset.edit)openEditForm(target.dataset.edit);
-    if(target.dataset.removeShop)await removeEvent(target.dataset.removeShop);
+    if(target.dataset.removeShop&&confirm("この買い物項目を削除しますか？"))await removeEvent(target.dataset.removeShop);
     if(target.dataset.repeat){const source=state.events.find(x=>x.id===target.dataset.repeat);if(source)await addEntry({item:source.item,category:source.category,interval:source.interval,note:source.note})}
     if(target.dataset.deleteEntry&&confirm("この記録を削除しますか？"))await removeEvent(target.dataset.deleteEntry);
   }catch{}
