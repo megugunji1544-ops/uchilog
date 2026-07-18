@@ -14,7 +14,7 @@ const fixedQuickItems=[
 
 let state={events:[],settings:{householdName:"我が家",quickItems:[]}};
 let currentUser=null,currentHistoryFilter="all",receiptItems=[],receiptFile=null;
-let unsubscribeEvents=null,unsubscribeSettings=null,authGeneration=0;
+let unsubscribeEvents=null,unsubscribeSettings=null,authGeneration=0,signInInProgress=false;
 
 const $=id=>document.getElementById(id);
 const showOnly=id=>["authLoadingScreen","loginScreen","unauthorizedScreen","appShell"].forEach(x=>$(x).classList.toggle("hidden",x!==id));
@@ -94,9 +94,12 @@ async function initializeAuth(){
 }
 
 $("googleSignIn").onclick=async()=>{
+  if(signInInProgress)return;
+  signInInProgress=true;
   $("loginError").classList.add("hidden");$("googleSignIn").disabled=true;$("googleSignIn").textContent="Googleログイン処理中…";
   try{await authRepository.signIn()}
-  catch(error){$("loginError").textContent=`ログインに失敗しました：${readableError(error)}`;$("loginError").classList.remove("hidden");$("googleSignIn").disabled=false;$("googleSignIn").textContent="Googleでログイン"}
+  catch(error){$("loginError").textContent=`Googleログインに失敗しました：${error?.code||"auth/unknown-error"}: ${error?.message||"不明なエラー"}`;$("loginError").classList.remove("hidden")}
+  finally{signInInProgress=false;$("googleSignIn").disabled=false;$("googleSignIn").textContent="Googleでログイン"}
 };
 async function signOutUser(){
   stopDataSubscriptions();showOnly("authLoadingScreen");$("authLoadingMessage").textContent="ログアウト中…";

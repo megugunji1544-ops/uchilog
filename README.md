@@ -1,4 +1,4 @@
-# うちログ Firebase共有版 v1.1
+# うちログ Firebase共有版 v1.1.1
 
 夫婦2人で家事・買い物をリアルタイム共有する静的Webアプリです。Firebase AuthenticationのGoogleログインとCloud Firestoreを使用します。
 
@@ -39,7 +39,7 @@ FirebaseのWeb設定値はクライアント識別用であり秘密鍵ではあ
 3. サポートメールを設定して保存
 4. 「Settings」→「Authorized domains」に公開先ドメインを追加
 
-スマートフォンではGoogleログインのリダイレクト方式を使います。リダイレクト認証の互換性を確保しやすいため、公開先にはFirebase Hostingを推奨します。独自ドメインや他社ホスティングを使う場合は、Firebase公式のredirect best practicesに従って認証ドメインを構成してください。
+Googleログインは全環境で `signInWithPopup()` のみ使用します。iPhone SafariとGitHub Pagesの組み合わせで認証状態を引き継げないことがあるため、`signInWithRedirect()` と `getRedirectResult()` は使用していません。ログイン処理は「Googleでログイン」ボタンを押したときだけ開始します。
 
 ### 3. Firestore Database
 
@@ -162,6 +162,17 @@ firebase deploy --only hosting,firestore:rules
 
 同梱の `firebase.json` は本フォルダを公開ディレクトリとして使用し、READMEやRules等をHosting対象から除外します。SPAへの全URL書き換えは不要です。公開後、公開ドメインをAuthenticationのAuthorized domainsに追加します。
 
+### GitHub Pagesへ反映する場合
+
+1. ZIPを展開し、`uchilog_app_v1.1.1` 内の公開ファイルをGitHub Pagesの公開元へ上書き
+2. `firebase-config.js` が本番設定になっていることを確認
+3. Gitで変更をコミットしてpush
+4. GitHubの「Settings」→「Pages」でデプロイ完了を確認
+5. Firebase AuthenticationのAuthorized domainsに `<ユーザー名>.github.io` を登録
+6. iPhone Safariでページを一度閉じて開き直す
+
+Service Workerのキャッシュ名は `uchilog-v1.1.1` です。更新版はインストール時に待機をスキップし、activate時に旧キャッシュを削除して既存ページを制御します。それでも旧画面が残る場合はページを閉じて開き直してください。
+
 ## 動作確認
 
 1. 未ログイン時にログイン画面だけが表示される
@@ -173,6 +184,8 @@ firebase deploy --only hosting,firestore:rules
 7. 旧データ移行を再実行しても重複しない
 8. OCR後、Firestoreに画像やStorageオブジェクトが作られない
 9. 機内モードでオフライン表示になり、画面が白くならない
+10. ログアウト後にログイン画面へ戻り、自動ログインが始まらない
+11. Popupを閉じた場合、エラーが表示されてログインボタンが再度有効になる
 
 ルールの拒否確認にはFirebase Emulator Suiteまたは別の未許可Googleアカウントを使用してください。
 
@@ -184,6 +197,7 @@ firebase deploy --only hosting,firestore:rules
 - FirestoreのローカルキャッシュはSDK既定動作です。完全なオフライン書き込み保証を目的とした専用UIはありません
 - Tesseract.jsとFirebase SDKをCDNから取得するため、初回表示にはインターネット接続が必要です
 - JSON書き出しのFirestore TimestampはSDKの内部表現で出力される場合があります
+- Safariの設定やコンテンツブロッカーがPopupを禁止している場合は、エラーを表示します。リダイレクト認証への自動切り替えは行いません
 
 ## 将来、家庭グループ方式へ変更する場合
 

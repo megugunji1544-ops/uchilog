@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
 import {
-  browserLocalPersistence, getAuth, getRedirectResult, GoogleAuthProvider,
-  onAuthStateChanged, setPersistence, signInWithPopup, signInWithRedirect, signOut
+  browserLocalPersistence, getAuth, GoogleAuthProvider,
+  onAuthStateChanged, setPersistence, signInWithPopup, signOut
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 import {
   addDoc, collection, deleteDoc, doc, getDoc, getDocs, getFirestore,
@@ -18,14 +18,11 @@ provider.setCustomParameters({ prompt: "select_account" });
 export const authRepository = {
   async initialize() {
     await setPersistence(auth, browserLocalPersistence);
-    return getRedirectResult(auth);
   },
   subscribeAuthState(callback) {
     return onAuthStateChanged(auth, callback);
   },
-  async signIn() {
-    const mobile = matchMedia("(max-width: 760px), (pointer: coarse)").matches;
-    if (mobile) return signInWithRedirect(auth, provider);
+  signIn() {
     return signInWithPopup(auth, provider);
   },
   signOut() {
