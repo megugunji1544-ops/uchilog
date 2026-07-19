@@ -1,4 +1,4 @@
-const CACHE="uchilog-v1.2.0";
+const CACHE="uchilog-v1.2.1";
 const ASSETS=["./","./index.html","./styles.css","./app.js","./repositories.js","./firebase-config.js","./manifest.webmanifest","./icon-192.png","./icon-512.png"];
 
 importScripts("https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js");

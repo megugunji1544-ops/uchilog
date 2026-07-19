@@ -6,5 +6,5 @@ export const firebaseConfig = {
   messagingSenderId: "440111185332",
   appId: "1:440111185332:web:92cc32e2c2fb8784b0c6e1",
   // Firebase Console > Project settings > Cloud Messaging > Web Push certificates
-  vapidKey: "XvUQGwFLHLcOSog1zA9vFPZHjZy105WWOxkSzlVNfaQ"
+  vapidKey: "REPLACE_WITH_YOUR_PUBLIC_VAPID_KEY"
 };

@@ -240,7 +240,7 @@ function openEntryForm(type,forcedCategory=null){
   $("entryType").value=type;$("entryEditId").value="";$("entryText").value="";$("entryNote").value="";$("entryDate").value=isoToday();$("entryInterval").value="";
   const select=$("entryCategory");select.innerHTML="";Object.entries(categories).filter(([key])=>key!=="shopping").forEach(([key,value])=>select.add(new Option(value.label,key)));if(forcedCategory)select.value=forcedCategory;
   const isShopping=type.startsWith("shopping");
-  $("categoryWrap").classList.toggle("hidden",isShopping);$("intervalWrap").classList.toggle("hidden",isShopping);
+  $("categoryWrap").hidden=isShopping;$("intervalWrap").hidden=isShopping;
   $("entryTextHelp").classList.toggle("hidden",!isShopping);
   $("entryText").rows=isShopping?4:1;
   const isWant=type==="shopping-want";$("formEyebrow").textContent=isShopping?"SHOPPING":"HOUSE LOG";$("formTitle").textContent=isWant?"買いたいものを追加":type==="shopping-bought"?"買ったものを記録":"家事の記録を追加";$("entryText").placeholder=isWant?"例：ヨーグルト\n牛乳\nバナナ":type==="shopping-bought"?"例：バナナ\n卵\nパン":"例：トイレ掃除";

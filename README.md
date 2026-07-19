@@ -1,4 +1,4 @@
-# うちログ Firebase共有版 v1.2.0
+# うちログ Firebase共有版 v1.2.1
 
 夫婦2人で家事・買い物をリアルタイム共有する静的Webアプリです。Firebase AuthenticationのGoogleログインとCloud Firestoreを使用します。
 
@@ -203,6 +203,12 @@ Service Workerのキャッシュ名は `uchilog-v1.1.4` です。更新版はイ
 ## 将来、家庭グループ方式へ変更する場合
 
 `households/{householdId}` とメンバー情報を追加し、events/settingsを家庭配下へ移します。主な変更箇所は `repositories.js` のコレクションパス、`firestore.rules` の所属判定、`accessRepository` の許可モデル、ログイン後の家庭選択UI、localStorage移行先です。UI側はRepository APIを維持すれば変更を最小化できます。
+
+## v1.2.1 変更点
+
+- 「買いたいもの」「買ったもの」のカテゴリ選択欄がCSSの詳細度により表示される問題を修正
+- 買い物フォームのカテゴリと目安日数をネイティブの`hidden`属性で確実に非表示化
+- キャッシュ名を `uchilog-v1.2.1` に更新
 
 
 ## v1.1.4 変更点
