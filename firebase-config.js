@@ -4,7 +4,5 @@ export const firebaseConfig = {
   projectId: "uchilog-app",
   storageBucket: "uchilog-app.firebasestorage.app",
   messagingSenderId: "440111185332",
-  appId: "1:440111185332:web:92cc32e2c2fb8784b0c6e1",
-  // Firebase Console > Project settings > Cloud Messaging > Web Push certificates
-  vapidKey: "REPLACE_WITH_YOUR_PUBLIC_VAPID_KEY"
+  appId: "1:440111185332:web:92cc32e2c2fb8784b0c6e1"
 };

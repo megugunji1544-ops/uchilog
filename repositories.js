@@ -5,18 +5,14 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 import {
   addDoc, collection, deleteDoc, doc, getDoc, getDocs, getFirestore,
-  onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, writeBatch
+  onSnapshot, orderBy, query, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
-import {
-  deleteToken, getMessaging, getToken, isSupported as isMessagingSupported, onMessage
-} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-messaging.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 const provider = new GoogleAuthProvider();
-let messagingInstance = null;
 provider.setCustomParameters({ prompt: "select_account" });
 
 export const authRepository = {
@@ -42,6 +38,11 @@ export const accessRepository = {
   async isAllowed(uid) {
     const user = await this.getAllowedUser(uid);
     return Boolean(user?.active);
+  },
+  subscribe(uid, callback, onError) {
+    return onSnapshot(doc(db, "allowedUsers", uid), snapshot=>{
+      callback(snapshot.exists()?{id:snapshot.id,...snapshot.data()}:null);
+    },onError);
   }
 };
 
@@ -109,58 +110,33 @@ export const settingsRepository = {
       ...changes,
       updatedAt: serverTimestamp()
     }, { merge: true });
+  },
+  updateShoppingActivity(user) {
+    return setDoc(doc(db, "settings", "default"), {
+      householdName: "我が家",
+      shoppingLastUpdatedBy: user.uid,
+      shoppingLastUpdatedByName: user.displayName || user.email || "ユーザー",
+      shoppingLastUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
   }
 };
 
-
-async function sha256(value) {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
-}
-
-export const notificationRepository = {
-  isConfigured() {
-    return Boolean(firebaseConfig.vapidKey && !firebaseConfig.vapidKey.startsWith("REPLACE_"));
+export const userStateRepository = {
+  async initializeIfNeeded(uid) {
+    const ref=doc(db, "userStates", uid);
+    const snapshot=await getDoc(ref);
+    if(snapshot.exists())return snapshot.data();
+    const now=Timestamp.now();
+    await setDoc(ref,{shoppingLastSeenAt:serverTimestamp(),updatedAt:serverTimestamp()});
+    return{shoppingLastSeenAt:now,updatedAt:now};
   },
-  async isSupported() {
-    return "Notification" in window && "serviceWorker" in navigator && await isMessagingSupported();
-  },
-  async enable(uid) {
-    if (!this.isConfigured()) throw new Error("VAPID公開鍵が設定されていません");
-    if (!(await this.isSupported())) throw new Error("このブラウザはプッシュ通知に対応していません");
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") throw new Error("通知が許可されませんでした");
-    const serviceWorkerRegistration = await navigator.serviceWorker.ready;
-    messagingInstance ||= getMessaging(firebaseApp);
-    const token = await getToken(messagingInstance, {
-      vapidKey: firebaseConfig.vapidKey,
-      serviceWorkerRegistration
-    });
-    if (!token) throw new Error("通知トークンを取得できませんでした");
-    const tokenId = await sha256(token);
-    await setDoc(doc(db, "notificationTokens", uid, "tokens", tokenId), {
-      uid,
-      token,
-      active: true,
-      userAgent: navigator.userAgent,
-      platform: navigator.platform || "",
-      updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp()
-    }, { merge: true });
-    localStorage.setItem("uchilog_fcm_token_id", tokenId);
-    return token;
-  },
-  async disable(uid) {
-    if (!(await this.isSupported())) return;
-    messagingInstance ||= getMessaging(firebaseApp);
-    const tokenId = localStorage.getItem("uchilog_fcm_token_id");
-    if (tokenId) await deleteDoc(doc(db, "notificationTokens", uid, "tokens", tokenId));
-    await deleteToken(messagingInstance).catch(() => false);
-    localStorage.removeItem("uchilog_fcm_token_id");
-  },
-  subscribeForeground(callback) {
-    if (!messagingInstance) messagingInstance = getMessaging(firebaseApp);
-    return onMessage(messagingInstance, callback);
+  async markShoppingAsSeen(uid) {
+    const now=Timestamp.now();
+    await setDoc(doc(db, "userStates", uid),{
+      shoppingLastSeenAt:serverTimestamp(),
+      updatedAt:serverTimestamp()
+    },{merge:true});
+    return now;
   }
 };

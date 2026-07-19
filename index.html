@@ -48,7 +48,6 @@
     </div>
     <div class="header-actions">
       <div class="user-summary"><span id="currentUserName"></span><button id="signOut" class="text-button">ログアウト</button></div>
-      <button id="notificationButton" class="icon-button" aria-label="通知設定">🔕</button>
       <button id="openQuickAdd" class="icon-button" aria-label="クイック登録">＋</button>
     </div>
   </header>
@@ -75,6 +74,12 @@
     </nav>
 
     <section id="view-home" class="view active">
+      <section id="shoppingNotice" class="shopping-notice" aria-live="polite">
+        <span class="shopping-notice-icon">🛒</span>
+        <div><strong id="shoppingNoticeText">買い物リストを確認中…</strong><small id="shoppingNoticeSubtext"></small></div>
+        <button type="button" class="text-button" data-open-shopping-mode>買い物モード</button>
+      </section>
+
       <section class="section-block">
         <div class="section-heading">
           <div>
@@ -91,9 +96,10 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">TO BUY</p>
-            <h2>買いたいもの</h2>
+            <h2>買いたいもの <span id="homeShoppingBadge" class="count-badge">0</span></h2>
+            <p id="homeShoppingMeta" class="section-note">最終更新を確認中…</p>
           </div>
-          <button class="text-button" data-open-form="shopping-want">追加</button>
+          <div class="heading-actions"><button class="text-button" data-open-shopping-mode>買い物モード</button><button class="text-button" data-open-form="shopping-want">追加</button></div>
         </div>
         <div id="homeShoppingList" class="card-list"></div>
       </section>
@@ -127,7 +133,7 @@
       </section>
 
       <section class="section-block">
-        <div class="section-heading"><div><p class="eyebrow">SHOPPING LIST</p><h2>買い物リスト</h2></div></div>
+        <div class="section-heading"><div><p class="eyebrow">SHOPPING LIST</p><h2>買い物リスト <span id="shoppingBadge" class="count-badge">0</span></h2><p id="shoppingMeta" class="section-note">最終更新を確認中…</p></div><button type="button" class="primary-button compact" data-open-shopping-mode>買い物モード</button></div>
         <div id="shoppingList" class="card-list"></div>
       </section>
 
@@ -154,6 +160,18 @@
     </section>
   </main>
   </div>
+
+  <section id="shoppingMode" class="shopping-mode hidden" aria-labelledby="shoppingModeTitle">
+    <header class="shopping-mode-header">
+      <button id="closeShoppingMode" type="button" class="secondary-button">← 戻る</button>
+      <div><p class="eyebrow">SHOPPING MODE</p><h2 id="shoppingModeTitle">買い物モード</h2></div>
+      <strong id="shoppingModeCount" class="shopping-mode-count">あと0件</strong>
+    </header>
+    <p id="shoppingModeMeta" class="shopping-mode-meta"></p>
+    <p id="shoppingModeError" class="error-message hidden" role="alert"></p>
+    <div id="shoppingModeList" class="shopping-mode-list"></div>
+    <div id="shoppingModeComplete" class="shopping-mode-complete hidden"><span>🎉</span><h2>お買い物完了！</h2><p>全部買えました。</p></div>
+  </section>
 
   <dialog id="entryDialog" class="app-dialog">
     <form method="dialog" id="entryForm">
@@ -213,24 +231,6 @@
         <button type="button" id="addFavorite" class="secondary-button">追加</button>
       </div>
       <div class="dialog-actions"><button value="cancel" class="primary-button full">完了</button></div>
-    </form>
-  </dialog>
-
-
-  <dialog id="notificationDialog" class="app-dialog">
-    <form method="dialog">
-      <div class="dialog-header">
-        <div><p class="eyebrow">NOTIFICATIONS</p><h2>買い物通知</h2></div>
-        <button class="icon-button small" value="cancel" aria-label="閉じる">×</button>
-      </div>
-      <p class="helper">相手が「買いたいもの」を追加したときと、「買った」にしたときに通知します。自分の操作は自分には通知されません。</p>
-      <div id="notificationStatus" class="status-box">通知状態を確認しています…</div>
-      <p id="notificationHint" class="helper"></p>
-      <p id="notificationError" class="error-message hidden"></p>
-      <div class="dialog-actions">
-        <button id="disableNotifications" type="button" class="secondary-button hidden">この端末の通知を停止</button>
-        <button id="enableNotifications" type="button" class="primary-button">この端末で通知を受け取る</button>
-      </div>
     </form>
   </dialog>
 

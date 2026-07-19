@@ -30,13 +30,12 @@ service cloud.firestore {
       allow read, write: if isAllowedUser();
     }
 
-
-    match /notificationTokens/{uid}/tokens/{tokenId} {
-      allow read: if isAllowedUser() && request.auth.uid == uid;
+    match /userStates/{userId} {
+      allow read: if isAllowedUser() && request.auth.uid == userId;
       allow create, update: if isAllowedUser()
-        && request.auth.uid == uid
-        && request.resource.data.uid == request.auth.uid;
-      allow delete: if isAllowedUser() && request.auth.uid == uid;
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['shoppingLastSeenAt', 'updatedAt']);
+      allow delete: if false;
     }
 
     match /migrations/{uid} {

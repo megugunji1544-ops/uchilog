@@ -1,4 +1,4 @@
-# うちログ Firebase共有版 v1.2.1
+# うちログ Firebase共有版 v1.3.0
 
 夫婦2人で家事・買い物をリアルタイム共有する静的Webアプリです。Firebase AuthenticationのGoogleログインとCloud Firestoreを使用します。
 
@@ -11,7 +11,9 @@
 - 既存localStorageデータの重複防止付き移行
 - ブラウザ内レシートOCR（画像はFirebaseへ送信・保存しません）
 - JSONバックアップ、PWA対応、オフライン状態表示
-- 買い物追加・購入完了のプッシュ通知（Firebase Cloud Messaging + Cloud Functions）
+- 未購入件数、新着商品、買い物リストの最終更新者・相対時刻表示
+- スーパー向けの全画面「買い物モード」
+- アプリ起動時の買い物状況案内
 
 ## ファイル構成
 
@@ -110,6 +112,19 @@ Googleログインは全環境で `signInWithPopup()` のみ使用します。iP
 
 `action` は `wanted`（買いたい）、`bought`（購入済み）、`done`（家事等の完了）です。
 
+### `userStates/{uid}`
+
+```json
+{
+  "shoppingLastSeenAt": "serverTimestamp",
+  "updatedAt": "serverTimestamp"
+}
+```
+
+買い物の新着確認時刻です。本人のドキュメントだけ本人が読み書きできます。初回ログイン時に自動作成されるため、既存の買い物が一斉に新着になることはありません。
+
+`settings/default`には買い物リスト全体の最終更新者・時刻として、`shoppingLastUpdatedBy`、`shoppingLastUpdatedByName`、`shoppingLastUpdatedAt`が必要に応じて追加されます。
+
 ### `migrations/{uid}`
 
 端末データの移行完了マーカーです。途中失敗を完了扱いにしないため、全データと設定の保存後に作成します。
@@ -120,6 +135,7 @@ Googleログインは全環境で `signInWithPopup()` のみ使用します。iP
 - `accessRepository`：`allowedUsers/{uid}` の取得と許可判定
 - `eventRepository`：`add`、`update`、`remove`、`subscribe`、`getAll`、移行
 - `settingsRepository`：`settings/default` の購読と更新
+- `userStateRepository`：本人の新着確認状態の初期化と更新
 
 UIの `app.js` はlocalStorageやFirestoreへ共有データを直接保存しません。localStorageへの直接アクセスは旧データ読み取りと端末別移行済みフラグに限定しています。
 
@@ -165,14 +181,17 @@ firebase deploy --only hosting,firestore:rules
 
 ### GitHub Pagesへ反映する場合
 
-1. ZIPを展開し、`uchilog_app_v1.1.4` 内の公開ファイルをGitHub Pagesの公開元へ上書き
-2. `firebase-config.js` が本番設定になっていることを確認
-3. Gitで変更をコミットしてpush
-4. GitHubの「Settings」→「Pages」でデプロイ完了を確認
-5. Firebase AuthenticationのAuthorized domainsに `<ユーザー名>.github.io` を登録
-6. iPhone Safariでページを一度閉じて開き直す
+1. `uchilog_firebase_v1.3.0.zip`を展開
+2. 展開したファイルをGitHub Pagesの公開元へ上書き（`functions/`や`node_modules/`は不要）
+3. `firebase-config.js` が本番設定になっていることを確認
+4. Gitで変更をコミットしてpush
+5. GitHubの「Settings」→「Pages」で公開元ブランチ／フォルダとデプロイ完了を確認
+6. Firebase AuthenticationのAuthorized domainsに `<ユーザー名>.github.io` を登録
+7. `firestore.rules`をFirebaseコンソールへ反映
+8. iPhone Safariではページを閉じて開き直す
+9. ホーム画面追加版はアプリを完全に終了して再度起動し、変わらなければSafariで公開URLを一度開いてから再起動
 
-Service Workerのキャッシュ名は `uchilog-v1.1.4` です。更新版はインストール時に待機をスキップし、activate時に旧キャッシュを削除して既存ページを制御します。それでも旧画面が残る場合はページを閉じて開き直してください。
+Service Workerのキャッシュ名は `uchilog-v1.3.0` です。更新版はインストール時に待機をスキップし、activate時に旧キャッシュを削除して既存ページを制御します。
 
 ## 動作確認
 
@@ -187,6 +206,11 @@ Service Workerのキャッシュ名は `uchilog-v1.1.4` です。更新版はイ
 9. 機内モードでオフライン表示になり、画面が白くならない
 10. ログアウト後にログイン画面へ戻り、自動ログインが始まらない
 11. Popupを閉じた場合、エラーが表示されてログインボタンが再度有効になる
+12. 未購入件数が追加・購入完了・削除で変化する
+13. 相手の新規商品だけに新着が付き、買い物タブまたは買い物モード確認後に消える
+14. 買い物の追加・編集・削除・購入完了で最終更新者と時刻が変わる
+15. 買い物モードの連続タップが二重更新にならず、0件時に完了表示になる
+16. 起動時案内が新着／未購入あり／未購入なしで切り替わる
 
 ルールの拒否確認にはFirebase Emulator Suiteまたは別の未許可Googleアカウントを使用してください。
 
@@ -204,6 +228,44 @@ Service Workerのキャッシュ名は `uchilog-v1.1.4` です。更新版はイ
 
 `households/{householdId}` とメンバー情報を追加し、events/settingsを家庭配下へ移します。主な変更箇所は `repositories.js` のコレクションパス、`firestore.rules` の所属判定、`accessRepository` の許可モデル、ログイン後の家庭選択UI、localStorage移行先です。UI側はRepository APIを維持すれば変更を最小化できます。
 
+## v1.3.0 変更点
+
+- 買いたいもの件数バッジと起動時案内を追加
+- 相手が追加した未確認商品へ新着マークを追加
+- ユーザー別確認状態`userStates/{uid}`を追加
+- 買い物リストの最終更新者・相対時刻を追加
+- 未購入品に集中できる全画面買い物モードを追加
+- Push通知、FCM、Cloud Functionsは使用しない
+- キャッシュ名を`uchilog-v1.3.0`へ更新
+
+Firebaseコンソール側で必要な作業は、同梱`firestore.rules`の反映だけです。`userStates/{uid}`は許可ユーザーの初回利用時に自動作成されます。Blazeプラン、VAPIDキー、Cloud Functionsのデプロイは不要です。
+
+### v1.3.0の変更ファイル
+
+- `index.html`：件数・案内・買い物モードUI
+- `styles.css`：新着表示とスマートフォン向け買い物モード
+- `app.js`：件数、新着、相対時刻、買い物モード、起動時案内
+- `repositories.js`：`userStateRepository`と買い物更新情報
+- `firestore.rules`：本人専用`userStates/{uid}`ルール
+- `sw.js`：v1.3.0キャッシュ
+- `README.md`：設定・データ・公開手順
+
+新規ファイルと削除ファイルはありません。通知関連ファイルと`functions/`はv1.2.2で削除済みで、v1.3.0にも含まれません。
+
+## v1.2.2 変更点
+
+- プッシュ通知機能を一時的に取り下げ
+- 通知設定UI、Firebase Messaging、通知トークン、Cloud Functionsを削除
+- Service Workerを通常のPWAキャッシュ機能だけに戻し、キャッシュ名を `uchilog-v1.2.2` に更新
+
+以前のv1.2.0でCloud Functionsをデプロイ済みの場合は、コード更新とは別に次のコマンドで通知関数を停止してください。
+
+```bash
+firebase functions:delete notifyShoppingAdded notifyShoppingBought --region asia-northeast1
+```
+
+Firestoreに残っている`notificationTokens`コレクションは使用されません。不要であればFirebaseコンソールから削除できます。
+
 ## v1.2.1 変更点
 
 - 「買いたいもの」「買ったもの」のカテゴリ選択欄がCSSの詳細度により表示される問題を修正
@@ -216,44 +278,3 @@ Service Workerのキャッシュ名は `uchilog-v1.1.4` です。更新版はイ
 - 「買いたいもの」「買ったもの」ではカテゴリ選択欄を表示しません。
 - 買い物入力欄で、改行または読点・カンマ区切りによる複数項目の一括登録に対応しました。
 - 編集時は従来どおり1件ずつ編集します。
-
-
-## v1.2.0 通知機能の初期設定
-
-通知は、フロントエンドをGitHub Pagesへ置くだけでは動作しません。次の設定とCloud Functionsのデプロイが必要です。
-
-1. Firebaseコンソールの「プロジェクトの設定」→「Cloud Messaging」を開く
-2. 「ウェブプッシュ証明書」でキーペアを生成する
-3. 表示された公開鍵を `firebase-config.js` の `vapidKey` に貼り付ける
-4. Firestore Rulesを更新する
-5. Functionsの依存関係をインストールしてデプロイする
-
-```bash
-cd functions
-npm install
-cd ..
-firebase deploy --only functions,firestore:rules
-```
-
-Cloud FunctionsのデプロイにはFirebaseプロジェクトをBlazeプランへ変更する必要があります。小規模な夫婦利用では通常ごく少額または無料枠内に収まりますが、課金アカウントの登録は必要です。
-
-### iPhoneで通知を有効にする
-
-1. Safariでうちログを開く
-2. 共有ボタンから「ホーム画面に追加」
-3. ホーム画面に追加された「うちログ」を開く
-4. 右上の🔕を押す
-5. 「この端末で通知を受け取る」を押し、通知を許可する
-6. ご夫婦それぞれの端末で同じ操作を行う
-
-通知トークンは `notificationTokens/{uid}/tokens/{tokenId}` に保存されます。自分が追加・完了した操作は自分には通知されず、もう一人の有効な端末へ送信されます。
-
-## v1.2.0 変更点
-
-- 買いたいものの追加通知を追加
-- 「買った」操作の完了通知を追加
-- 通知設定ダイアログと端末ごとの有効化・停止を追加
-- FCMトークン保存用Security Rulesを追加
-- FirestoreトリガーのCloud Functionsを追加
-- Service WorkerをFCMバックグラウンド通知対応へ更新
-- キャッシュ名を `uchilog-v1.2.0` に更新

@@ -1,4 +1,4 @@
-import { authRepository, accessRepository, eventRepository, settingsRepository, notificationRepository } from "./repositories.js";
+import { authRepository, accessRepository, eventRepository, settingsRepository, userStateRepository } from "./repositories.js";
 
 const STORAGE_KEY="uchilog_v1";
 const categories={
@@ -12,10 +12,11 @@ const fixedQuickItems=[
   {text:"爪切り",category:"child",interval:10}
 ];
 
-let state={events:[],settings:{householdName:"我が家",quickItems:[]}};
+let state={events:[],settings:{householdName:"我が家",quickItems:[]},userState:{shoppingLastSeenAt:null}};
 let currentUser=null,currentHistoryFilter="all",receiptItems=[],receiptFile=null;
-let unsubscribeEvents=null,unsubscribeSettings=null,authGeneration=0,signInInProgress=false;
-let foregroundNotificationUnsubscribe=null;
+let unsubscribeEvents=null,unsubscribeSettings=null,unsubscribeAccess=null,authGeneration=0,signInInProgress=false;
+let shoppingSeenTimer=null,startupRendered=false,userStateInitializationError=null;
+const shoppingPendingIds=new Set();
 
 const $=id=>document.getElementById(id);
 const showOnly=id=>["authLoadingScreen","loginScreen","unauthorizedScreen","appShell"].forEach(x=>$(x).classList.toggle("hidden",x!==id));
@@ -26,6 +27,7 @@ const daysSince=d=>Math.floor((new Date(isoToday())-new Date(d+"T00:00:00"))/864
 const escapeHtml=(s="")=>String(s).replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 const emptyNode=()=>$("emptyTemplate").content.cloneNode(true);
 const eventTime=e=>e.createdAt?.toMillis?.()||Date.parse(e.createdAt||0)||0;
+const timestampMillis=value=>value?.toMillis?.()||Number(value)||Date.parse(value||0)||0;
 const sortedEvents=()=>[...state.events].sort((a,b)=>(b.performedAt||"").localeCompare(a.performedAt||"")||eventTime(b)-eventTime(a));
 const entries=()=>sortedEvents().filter(e=>e.action!=="wanted");
 const shopping=()=>sortedEvents().filter(e=>e.category==="shopping");
@@ -48,8 +50,16 @@ async function saveAction(action){
   catch(error){setSyncStatus(`保存失敗：${readableError(error)}`,"error");throw error}
 }
 function stopDataSubscriptions(){
-  unsubscribeEvents?.();unsubscribeSettings?.();unsubscribeEvents=null;unsubscribeSettings=null;
-  state={events:[],settings:{householdName:"我が家",quickItems:[]}};
+  unsubscribeEvents?.();unsubscribeSettings?.();unsubscribeAccess?.();unsubscribeEvents=null;unsubscribeSettings=null;unsubscribeAccess=null;
+  clearTimeout(shoppingSeenTimer);shoppingSeenTimer=null;shoppingPendingIds.clear();startupRendered=false;userStateInitializationError=null;
+  $("shoppingMode")?.classList.add("hidden");document.body.classList.remove("shopping-mode-open");
+  state={events:[],settings:{householdName:"我が家",quickItems:[]},userState:{shoppingLastSeenAt:null}};
+}
+function showUnauthorizedUser(user){
+  $("deniedName").textContent=user.displayName||"（未設定）";
+  $("deniedEmail").textContent=user.email||"（未設定）";
+  $("deniedUid").textContent=user.uid;
+  currentUser=null;showOnly("unauthorizedScreen");
 }
 
 async function handleAuthenticatedUser(user,generation){
@@ -58,19 +68,24 @@ async function handleAuthenticatedUser(user,generation){
     const allowed=await accessRepository.getAllowedUser(user.uid);
     if(generation!==authGeneration)return;
     if(!allowed?.active){
-      currentUser=null;
-      $("deniedName").textContent=user.displayName||"（未設定）";
-      $("deniedEmail").textContent=user.email||"（未設定）";
-      $("deniedUid").textContent=user.uid;
-      showOnly("unauthorizedScreen");
+      showUnauthorizedUser(user);
       return;
     }
     currentUser=user;$("currentUserName").textContent=user.displayName||user.email;
-    showOnly("appShell");setSyncStatus("データ取得中…");
-    await refreshNotificationUi();
-    setupForegroundNotifications();
+    unsubscribeAccess=accessRepository.subscribe(user.uid,access=>{
+      if(access?.active)return;
+      stopDataSubscriptions();showUnauthorizedUser(user);
+    },error=>setSyncStatus(`利用権限の確認に失敗しました：${readableError(error)}`,"error"));
+    try{state.userState=await userStateRepository.initializeIfNeeded(user.uid)}
+    catch(error){userStateInitializationError=`確認状態を取得できませんでした：${readableError(error)}`;state.userState={shoppingLastSeenAt:Date.now()}}
     let eventsReady=false,settingsReady=false;
-    const markReady=()=>{if(eventsReady&&settingsReady)setSyncStatus(navigator.onLine?"同期済み":"オフライン","offline")};
+    const markReady=()=>{
+      if(!eventsReady||!settingsReady)return;
+      showOnly("appShell");
+      if(userStateInitializationError)setSyncStatus(userStateInitializationError,"error");
+      else setSyncStatus(navigator.onLine?"同期済み":"オフライン","offline");
+      if(!startupRendered){startupRendered=true;renderShoppingSummary();offerMigration()}
+    };
     unsubscribeEvents=eventRepository.subscribe(items=>{
       state.events=items;eventsReady=true;renderAll();markReady();
     },error=>setSyncStatus(`Firestore接続失敗：${readableError(error)}`,"error"));
@@ -78,7 +93,6 @@ async function handleAuthenticatedUser(user,generation){
       state.settings={householdName:"我が家",quickItems:[],...settings};
       settingsReady=true;renderAll();markReady();
     },error=>setSyncStatus(`設定の取得失敗：${readableError(error)}`,"error"));
-    await offerMigration();
   }catch(error){
     if(generation!==authGeneration)return;
     $("loginError").textContent=`利用権限の確認に失敗しました：${readableError(error)}`;
@@ -114,45 +128,16 @@ $("copyUid").onclick=async()=>{
   catch{$("copyStatus").textContent="コピーできませんでした。UIDを長押ししてコピーしてください。"}
 };
 
-function isIosDevice(){return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1)}
-function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true}
-async function refreshNotificationUi(){
-  const configured=notificationRepository.isConfigured();
-  const supported=await notificationRepository.isSupported().catch(()=>false);
-  const granted=typeof Notification!=="undefined"&&Notification.permission==="granted";
-  $("notificationButton").textContent=granted?"🔔":"🔕";
-  $("notificationStatus").textContent=!configured?"FirebaseのVAPID公開鍵を設定すると利用できます。":!supported?"このブラウザではプッシュ通知を利用できません。":granted?"この端末では通知が有効です。":"この端末では通知がまだ有効になっていません。";
-  $("enableNotifications").classList.toggle("hidden",granted||!configured||!supported);
-  $("disableNotifications").classList.toggle("hidden",!granted);
-  $("notificationHint").textContent=isIosDevice()&&!isStandalone()?"iPhoneでは、Safariの共有メニューから「ホーム画面に追加」し、追加したアイコンから開いて通知を有効にしてください。":"通知の許可は、このボタンを押したときだけ確認します。";
+function wantedItems(){return shopping().filter(x=>x.action==="wanted")}
+function newWantedItems(){
+  const seen=timestampMillis(state.userState.shoppingLastSeenAt);
+  return wantedItems().filter(item=>item.createdBy!==currentUser?.uid&&eventTime(item)>seen);
 }
-function setupForegroundNotifications(){
-  if(foregroundNotificationUnsubscribe||typeof Notification==="undefined"||Notification.permission!=="granted")return;
-  try{foregroundNotificationUnsubscribe=notificationRepository.subscribeForeground(payload=>{
-    const title=payload.data?.title||"うちログ";
-    const body=payload.data?.body||"買い物リストが更新されました";
-    setSyncStatus(`${title}：${body}`);
-    if(document.hidden&&Notification.permission==="granted")new Notification(title,{body,icon:"./icon-192.png"});
-  })}catch(error){console.warn("Foreground notification setup failed",error)}
-}
-$("notificationButton").onclick=async()=>{await refreshNotificationUi();$("notificationError").classList.add("hidden");$("notificationDialog").showModal()};
-$("enableNotifications").onclick=async()=>{
-  $("enableNotifications").disabled=true;$("notificationError").classList.add("hidden");
-  try{await notificationRepository.enable(currentUser.uid);setupForegroundNotifications();await refreshNotificationUi();$("notificationStatus").textContent="通知を有効にしました。"}
-  catch(error){$("notificationError").textContent=`通知を有効にできませんでした：${readableError(error)}`;$("notificationError").classList.remove("hidden")}
-  finally{$("enableNotifications").disabled=false}
-};
-$("disableNotifications").onclick=async()=>{
-  $("disableNotifications").disabled=true;$("notificationError").classList.add("hidden");
-  try{await notificationRepository.disable(currentUser.uid);foregroundNotificationUnsubscribe?.();foregroundNotificationUnsubscribe=null;await refreshNotificationUi();$("notificationStatus").textContent="この端末の通知を停止しました。"}
-  catch(error){$("notificationError").textContent=`通知を停止できませんでした：${readableError(error)}`;$("notificationError").classList.remove("hidden")}
-  finally{$("disableNotifications").disabled=false}
-};
-
-function renderAll(){renderStats();renderFavorites();renderShopping();renderDue();renderEntries();renderCategories();renderLastDone();renderHistory()}
+function isNewShoppingItem(item){return newWantedItems().some(candidate=>candidate.id===item.id)}
+function renderAll(){renderStats();renderFavorites();renderShopping();renderShoppingSummary();renderShoppingMode();renderDue();renderEntries();renderCategories();renderLastDone();renderHistory()}
 function renderStats(){
   $("todayLabel").textContent=new Intl.DateTimeFormat("ja-JP",{month:"long",day:"numeric",weekday:"short"}).format(new Date());
-  $("shoppingCount").textContent=shopping().filter(x=>x.action==="wanted").length;
+  $("shoppingCount").textContent=wantedItems().length;
   $("dueCount").textContent=getDueItems().length;
   $("todayCount").textContent=entries().filter(x=>x.performedAt===isoToday()).length;
 }
@@ -168,17 +153,88 @@ function renderFavorites(){
 }
 function shoppingCard(item){
   const div=document.createElement("div");div.className="list-card";
-  div.innerHTML=`<div class="list-card-main"><div class="badge-icon">🛒</div><div><h3>${escapeHtml(item.item)}</h3><p>${fmtDate(item.performedAt)}に追加</p></div></div><div class="card-actions"><button class="mini-button" data-edit="${item.id}">編集</button><button class="mini-button" data-buy="${item.id}">買った</button><button class="mini-button danger" data-remove-shop="${item.id}">×</button></div>`;
+  div.innerHTML=`<div class="list-card-main"><div class="badge-icon">🛒</div><div><h3>${escapeHtml(item.item)}${isNewShoppingItem(item)?'<span class="new-badge">新着</span>':""}</h3><p>${escapeHtml(item.createdByName||"ユーザー")}・${fmtDate(item.performedAt)}に追加</p></div></div><div class="card-actions"><button class="mini-button" data-edit="${item.id}">編集</button><button class="mini-button" data-buy="${item.id}">買った</button><button class="mini-button danger" data-remove-shop="${item.id}">×</button></div>`;
   return div;
 }
 function renderShopping(){
-  const wants=shopping().filter(x=>x.action==="wanted");
+  const wants=wantedItems();
   ["homeShoppingList","shoppingList"].forEach(id=>{
     const el=$(id);el.innerHTML="";wants.slice(0,id==="homeShoppingList"?5:999).forEach(x=>el.appendChild(shoppingCard(x)));if(!el.children.length)el.appendChild(emptyNode());
   });
   const bought=$("purchasedList");bought.innerHTML="";
   shopping().filter(x=>x.action==="bought").slice(0,20).forEach(x=>bought.appendChild(timelineNode(x,true)));
   if(!bought.children.length)bought.appendChild(emptyNode());
+}
+function latestShoppingActivity(){
+  const settingsTime=timestampMillis(state.settings.shoppingLastUpdatedAt);
+  const latestEvent=[...shopping()].sort((a,b)=>Math.max(timestampMillis(b.updatedAt),eventTime(b))-Math.max(timestampMillis(a.updatedAt),eventTime(a)))[0];
+  const eventActivity=latestEvent?{time:Math.max(timestampMillis(latestEvent.updatedAt),eventTime(latestEvent)),name:latestEvent.updatedByName||latestEvent.createdByName||"ユーザー"}:null;
+  if(settingsTime>=Number(eventActivity?.time||0))return settingsTime?{time:settingsTime,name:state.settings.shoppingLastUpdatedByName||"ユーザー"}:eventActivity;
+  return eventActivity;
+}
+function formatRelativeTime(milliseconds){
+  if(!milliseconds)return"更新履歴なし";
+  const now=new Date(),date=new Date(milliseconds),diff=Math.max(0,now-date);
+  if(diff<60000)return"たった今";
+  if(diff<3600000)return`${Math.floor(diff/60000)}分前`;
+  if(diff<21600000)return`${Math.floor(diff/3600000)}時間前`;
+  const time=new Intl.DateTimeFormat("ja-JP",{hour:"2-digit",minute:"2-digit"}).format(date);
+  const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const target=new Date(date.getFullYear(),date.getMonth(),date.getDate());
+  const dayDiff=Math.round((today-target)/86400000);
+  if(dayDiff===0)return`今日 ${time}`;
+  if(dayDiff===1)return`昨日 ${time}`;
+  if(date.getFullYear()===now.getFullYear())return`${date.getMonth()+1}月${date.getDate()}日 ${time}`;
+  return`${date.getFullYear()}年${date.getMonth()+1}月${date.getDate()}日 ${time}`;
+}
+function shoppingMetaText(){
+  const activity=latestShoppingActivity();
+  return activity?`最終更新：${activity.name}・${formatRelativeTime(activity.time)}`:"まだ更新はありません";
+}
+function renderShoppingSummary(){
+  if(!$("shoppingNotice"))return;
+  const count=wantedItems().length,newCount=newWantedItems().length;
+  $("homeShoppingBadge").textContent=count;$("shoppingBadge").textContent=count;
+  $("homeShoppingMeta").textContent=shoppingMetaText();$("shoppingMeta").textContent=shoppingMetaText();$("shoppingModeMeta").textContent=shoppingMetaText();
+  $("shoppingNoticeText").textContent=newCount?`相手から新しく${newCount}件追加されています`:count?`買いたいものが${count}件あります`:"現在、買いたいものはありません";
+  $("shoppingNoticeSubtext").textContent=newCount?`未購入は全部で${count}件です`:"";
+}
+function renderShoppingMode(){
+  const items=[...wantedItems()].sort((a,b)=>eventTime(a)-eventTime(b));
+  $("shoppingModeCount").textContent=`あと${items.length}件`;
+  $("shoppingModeList").innerHTML="";
+  items.forEach(item=>{
+    const button=document.createElement("button");button.type="button";
+    button.className="shopping-mode-item"+(shoppingPendingIds.has(item.id)?" saving":"");
+    button.dataset.shoppingModeBuy=item.id;
+    button.disabled=shoppingPendingIds.has(item.id);
+    button.innerHTML=`<span class="shopping-mode-check" aria-hidden="true"></span><span><strong>${escapeHtml(item.item)}</strong><small>${escapeHtml(item.createdByName||"ユーザー")}が追加</small></span>${isNewShoppingItem(item)?'<span class="new-badge">新着</span>':""}`;
+    $("shoppingModeList").appendChild(button);
+  });
+  $("shoppingModeComplete").classList.toggle("hidden",items.length!==0);
+}
+function scheduleShoppingSeen(){
+  clearTimeout(shoppingSeenTimer);
+  shoppingSeenTimer=setTimeout(async()=>{
+    if(!currentUser)return;
+    try{state.userState.shoppingLastSeenAt=await userStateRepository.markShoppingAsSeen(currentUser.uid);userStateInitializationError=null;renderAll()}
+    catch(error){setSyncStatus(`新着状態を更新できませんでした：${readableError(error)}`,"error")}
+  },600);
+}
+function openShoppingMode(){
+  $("shoppingModeError").classList.add("hidden");
+  $("shoppingMode").classList.remove("hidden");document.body.classList.add("shopping-mode-open");
+  renderShoppingMode();scheduleShoppingSeen();
+}
+function closeShoppingMode(){$("shoppingMode").classList.add("hidden");document.body.classList.remove("shopping-mode-open")}
+document.querySelectorAll("[data-open-shopping-mode]").forEach(button=>button.onclick=openShoppingMode);
+$("closeShoppingMode").onclick=closeShoppingMode;
+async function completeShoppingModeItem(id){
+  if(shoppingPendingIds.has(id))return;
+  shoppingPendingIds.add(id);$("shoppingModeError").classList.add("hidden");renderShoppingMode();
+  try{await markBought(id)}
+  catch(error){$("shoppingModeError").textContent="更新できませんでした。通信状態を確認して、もう一度お試しください。";$("shoppingModeError").classList.remove("hidden");console.error(error)}
+  finally{shoppingPendingIds.delete(id);renderShoppingMode()}
 }
 function getLatestByTask(){
   const map=new Map();entries().forEach(e=>{if(e.category!=="shopping"&&!map.has(e.item))map.set(e.item,e)});return[...map.values()];
@@ -225,16 +281,19 @@ async function addEntry({item,category,performedAt=isoToday(),interval=null,note
   await saveAction(()=>eventRepository.add({item,category,action,note,performedAt,interval:interval?Number(interval):null,...userFields()}));
 }
 async function addShopping(item,action="wanted",performedAt=isoToday(),note=""){
-  await saveAction(()=>eventRepository.add({item,category:"shopping",action,note,performedAt,interval:null,...userFields()}));
+  await saveAction(async()=>{await eventRepository.add({item,category:"shopping",action,note,performedAt,interval:null,...userFields()});await settingsRepository.updateShoppingActivity(currentUser)});
 }
 async function addShoppingItems(items,action="wanted",performedAt=isoToday(),note=""){
-  await saveAction(()=>Promise.all(items.map(item=>eventRepository.add({item,category:"shopping",action,note,performedAt,interval:null,...userFields()}))));
+  await saveAction(async()=>{await Promise.all(items.map(item=>eventRepository.add({item,category:"shopping",action,note,performedAt,interval:null,...userFields()})));await settingsRepository.updateShoppingActivity(currentUser)});
 }
 function parseShoppingItems(value){
   return [...new Set(String(value).split(/\r?\n|[、,，]+/).map(item=>item.trim()).filter(Boolean))];
 }
-async function markBought(id){await saveAction(()=>eventRepository.update(id,{action:"bought",performedAt:isoToday(),updatedBy:currentUser.uid,updatedByName:currentUser.displayName||currentUser.email||"ユーザー"}))}
-async function removeEvent(id){await saveAction(()=>eventRepository.remove(id))}
+async function markBought(id){await saveAction(async()=>{await eventRepository.update(id,{action:"bought",performedAt:isoToday(),updatedBy:currentUser.uid,updatedByName:currentUser.displayName||currentUser.email||"ユーザー"});await settingsRepository.updateShoppingActivity(currentUser)})}
+async function removeEvent(id){
+  const source=state.events.find(item=>item.id===id);
+  await saveAction(async()=>{await eventRepository.remove(id);if(source?.category==="shopping")await settingsRepository.updateShoppingActivity(currentUser)});
+}
 
 function openEntryForm(type,forcedCategory=null){
   $("entryType").value=type;$("entryEditId").value="";$("entryText").value="";$("entryNote").value="";$("entryDate").value=isoToday();$("entryInterval").value="";
@@ -254,7 +313,7 @@ function openEditForm(id){
   if(source.category!=="shopping")$("entryCategory").value=source.category;
   $("formTitle").textContent=source.category==="shopping"?"買い物を編集":"家事の記録を編集";
 }
-document.querySelectorAll(".tab-button").forEach(button=>button.onclick=()=>{document.querySelectorAll(".tab-button,.view").forEach(x=>x.classList.remove("active"));button.classList.add("active");$("view-"+button.dataset.view).classList.add("active")});
+document.querySelectorAll(".tab-button").forEach(button=>button.onclick=()=>{document.querySelectorAll(".tab-button,.view").forEach(x=>x.classList.remove("active"));button.classList.add("active");$("view-"+button.dataset.view).classList.add("active");if(button.dataset.view==="shopping")scheduleShoppingSeen()});
 document.querySelectorAll("[data-open-form]").forEach(button=>button.onclick=()=>openEntryForm(button.dataset.openForm));$("openQuickAdd").onclick=()=>openEntryForm("chore");
 $("entryForm").addEventListener("submit",async event=>{
   event.preventDefault();
@@ -263,7 +322,7 @@ $("entryForm").addEventListener("submit",async event=>{
   const note=$("entryNote").value.trim(),performedAt=$("entryDate").value;
   $("entryDialog").close();
   try{
-    if(editId)await saveAction(()=>eventRepository.update(editId,{item,category:type.startsWith("shopping")?"shopping":$("entryCategory").value,action:type==="shopping-want"?"wanted":type==="shopping-bought"?"bought":"done",performedAt,interval:type.startsWith("shopping")?null:($("entryInterval").value?Number($("entryInterval").value):null),note}));
+    if(editId)await saveAction(async()=>{await eventRepository.update(editId,{item,category:type.startsWith("shopping")?"shopping":$("entryCategory").value,action:type==="shopping-want"?"wanted":type==="shopping-bought"?"bought":"done",performedAt,interval:type.startsWith("shopping")?null:($("entryInterval").value?Number($("entryInterval").value):null),note,updatedBy:currentUser.uid,updatedByName:currentUser.displayName||currentUser.email||"ユーザー"});if(type.startsWith("shopping"))await settingsRepository.updateShoppingActivity(currentUser)});
     else if(type==="shopping-want"||type==="shopping-bought"){
       const items=parseShoppingItems(item);
       if(!items.length)return;
@@ -275,6 +334,7 @@ document.body.addEventListener("click",async event=>{
   const target=event.target;
   try{
     if(target.dataset.closeDialog){$(target.dataset.closeDialog)?.close();return}
+    if(target.dataset.shoppingModeBuy)await completeShoppingModeItem(target.dataset.shoppingModeBuy);
     if(target.dataset.buy)await markBought(target.dataset.buy);
     if(target.dataset.edit)openEditForm(target.dataset.edit);
     if(target.dataset.removeShop&&confirm("この買い物項目を削除しますか？"))await removeEvent(target.dataset.removeShop);
@@ -372,6 +432,7 @@ async function offerMigration(){
 
 window.addEventListener("offline",()=>currentUser&&setSyncStatus("オフライン：再接続後に同期します","offline"));
 window.addEventListener("online",()=>currentUser&&setSyncStatus("再接続しました。同期中…"));
+setInterval(()=>currentUser&&renderShoppingSummary(),60000);
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(console.error);
 renderAll();
 initializeAuth();
