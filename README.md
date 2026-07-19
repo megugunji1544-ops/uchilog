@@ -1,4 +1,4 @@
-# うちログ Firebase共有版 v1.1.3
+# うちログ Firebase共有版 v1.2.0
 
 夫婦2人で家事・買い物をリアルタイム共有する静的Webアプリです。Firebase AuthenticationのGoogleログインとCloud Firestoreを使用します。
 
@@ -11,6 +11,7 @@
 - 既存localStorageデータの重複防止付き移行
 - ブラウザ内レシートOCR（画像はFirebaseへ送信・保存しません）
 - JSONバックアップ、PWA対応、オフライン状態表示
+- 買い物追加・購入完了のプッシュ通知（Firebase Cloud Messaging + Cloud Functions）
 
 ## ファイル構成
 
@@ -164,14 +165,14 @@ firebase deploy --only hosting,firestore:rules
 
 ### GitHub Pagesへ反映する場合
 
-1. ZIPを展開し、`uchilog_app_v1.1.3` 内の公開ファイルをGitHub Pagesの公開元へ上書き
+1. ZIPを展開し、`uchilog_app_v1.1.4` 内の公開ファイルをGitHub Pagesの公開元へ上書き
 2. `firebase-config.js` が本番設定になっていることを確認
 3. Gitで変更をコミットしてpush
 4. GitHubの「Settings」→「Pages」でデプロイ完了を確認
 5. Firebase AuthenticationのAuthorized domainsに `<ユーザー名>.github.io` を登録
 6. iPhone Safariでページを一度閉じて開き直す
 
-Service Workerのキャッシュ名は `uchilog-v1.1.3` です。更新版はインストール時に待機をスキップし、activate時に旧キャッシュを削除して既存ページを制御します。それでも旧画面が残る場合はページを閉じて開き直してください。
+Service Workerのキャッシュ名は `uchilog-v1.1.4` です。更新版はインストール時に待機をスキップし、activate時に旧キャッシュを削除して既存ページを制御します。それでも旧画面が残る場合はページを閉じて開き直してください。
 
 ## 動作確認
 
@@ -202,3 +203,51 @@ Service Workerのキャッシュ名は `uchilog-v1.1.3` です。更新版はイ
 ## 将来、家庭グループ方式へ変更する場合
 
 `households/{householdId}` とメンバー情報を追加し、events/settingsを家庭配下へ移します。主な変更箇所は `repositories.js` のコレクションパス、`firestore.rules` の所属判定、`accessRepository` の許可モデル、ログイン後の家庭選択UI、localStorage移行先です。UI側はRepository APIを維持すれば変更を最小化できます。
+
+
+## v1.1.4 変更点
+
+- 「買いたいもの」「買ったもの」ではカテゴリ選択欄を表示しません。
+- 買い物入力欄で、改行または読点・カンマ区切りによる複数項目の一括登録に対応しました。
+- 編集時は従来どおり1件ずつ編集します。
+
+
+## v1.2.0 通知機能の初期設定
+
+通知は、フロントエンドをGitHub Pagesへ置くだけでは動作しません。次の設定とCloud Functionsのデプロイが必要です。
+
+1. Firebaseコンソールの「プロジェクトの設定」→「Cloud Messaging」を開く
+2. 「ウェブプッシュ証明書」でキーペアを生成する
+3. 表示された公開鍵を `firebase-config.js` の `vapidKey` に貼り付ける
+4. Firestore Rulesを更新する
+5. Functionsの依存関係をインストールしてデプロイする
+
+```bash
+cd functions
+npm install
+cd ..
+firebase deploy --only functions,firestore:rules
+```
+
+Cloud FunctionsのデプロイにはFirebaseプロジェクトをBlazeプランへ変更する必要があります。小規模な夫婦利用では通常ごく少額または無料枠内に収まりますが、課金アカウントの登録は必要です。
+
+### iPhoneで通知を有効にする
+
+1. Safariでうちログを開く
+2. 共有ボタンから「ホーム画面に追加」
+3. ホーム画面に追加された「うちログ」を開く
+4. 右上の🔕を押す
+5. 「この端末で通知を受け取る」を押し、通知を許可する
+6. ご夫婦それぞれの端末で同じ操作を行う
+
+通知トークンは `notificationTokens/{uid}/tokens/{tokenId}` に保存されます。自分が追加・完了した操作は自分には通知されず、もう一人の有効な端末へ送信されます。
+
+## v1.2.0 変更点
+
+- 買いたいものの追加通知を追加
+- 「買った」操作の完了通知を追加
+- 通知設定ダイアログと端末ごとの有効化・停止を追加
+- FCMトークン保存用Security Rulesを追加
+- FirestoreトリガーのCloud Functionsを追加
+- Service WorkerをFCMバックグラウンド通知対応へ更新
+- キャッシュ名を `uchilog-v1.2.0` に更新

@@ -48,6 +48,7 @@
     </div>
     <div class="header-actions">
       <div class="user-summary"><span id="currentUserName"></span><button id="signOut" class="text-button">ログアウト</button></div>
+      <button id="notificationButton" class="icon-button" aria-label="通知設定">🔕</button>
       <button id="openQuickAdd" class="icon-button" aria-label="クイック登録">＋</button>
     </div>
   </header>
@@ -162,7 +163,7 @@
       </div>
       <input type="hidden" id="entryType">
       <input type="hidden" id="entryEditId">
-      <label>内容<input id="entryText" type="text" placeholder="例：ヨーグルト" required></label>
+      <label>内容<textarea id="entryText" rows="1" placeholder="例：ヨーグルト" required></textarea><small id="entryTextHelp" class="field-help hidden">1行に1つずつ入力すると、まとめて登録できます。</small></label>
       <label id="categoryWrap">カテゴリ<select id="entryCategory"></select></label>
       <label>日付<input id="entryDate" type="date" required></label>
       <label id="intervalWrap">目安の日数（任意）<input id="entryInterval" type="number" min="1" placeholder="例：30"></label>
@@ -212,6 +213,24 @@
         <button type="button" id="addFavorite" class="secondary-button">追加</button>
       </div>
       <div class="dialog-actions"><button value="cancel" class="primary-button full">完了</button></div>
+    </form>
+  </dialog>
+
+
+  <dialog id="notificationDialog" class="app-dialog">
+    <form method="dialog">
+      <div class="dialog-header">
+        <div><p class="eyebrow">NOTIFICATIONS</p><h2>買い物通知</h2></div>
+        <button class="icon-button small" value="cancel" aria-label="閉じる">×</button>
+      </div>
+      <p class="helper">相手が「買いたいもの」を追加したときと、「買った」にしたときに通知します。自分の操作は自分には通知されません。</p>
+      <div id="notificationStatus" class="status-box">通知状態を確認しています…</div>
+      <p id="notificationHint" class="helper"></p>
+      <p id="notificationError" class="error-message hidden"></p>
+      <div class="dialog-actions">
+        <button id="disableNotifications" type="button" class="secondary-button hidden">この端末の通知を停止</button>
+        <button id="enableNotifications" type="button" class="primary-button">この端末で通知を受け取る</button>
+      </div>
     </form>
   </dialog>
 

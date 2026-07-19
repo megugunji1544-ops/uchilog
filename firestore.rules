@@ -30,6 +30,15 @@ service cloud.firestore {
       allow read, write: if isAllowedUser();
     }
 
+
+    match /notificationTokens/{uid}/tokens/{tokenId} {
+      allow read: if isAllowedUser() && request.auth.uid == uid;
+      allow create, update: if isAllowedUser()
+        && request.auth.uid == uid
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAllowedUser() && request.auth.uid == uid;
+    }
+
     match /migrations/{uid} {
       allow read: if isAllowedUser() && request.auth.uid == uid;
       allow create, update: if isAllowedUser()

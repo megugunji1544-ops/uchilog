@@ -1,4 +1,4 @@
-import { authRepository, accessRepository, eventRepository, settingsRepository } from "./repositories.js";
+import { authRepository, accessRepository, eventRepository, settingsRepository, notificationRepository } from "./repositories.js";
 
 const STORAGE_KEY="uchilog_v1";
 const categories={
@@ -15,6 +15,7 @@ const fixedQuickItems=[
 let state={events:[],settings:{householdName:"我が家",quickItems:[]}};
 let currentUser=null,currentHistoryFilter="all",receiptItems=[],receiptFile=null;
 let unsubscribeEvents=null,unsubscribeSettings=null,authGeneration=0,signInInProgress=false;
+let foregroundNotificationUnsubscribe=null;
 
 const $=id=>document.getElementById(id);
 const showOnly=id=>["authLoadingScreen","loginScreen","unauthorizedScreen","appShell"].forEach(x=>$(x).classList.toggle("hidden",x!==id));
@@ -66,6 +67,8 @@ async function handleAuthenticatedUser(user,generation){
     }
     currentUser=user;$("currentUserName").textContent=user.displayName||user.email;
     showOnly("appShell");setSyncStatus("データ取得中…");
+    await refreshNotificationUi();
+    setupForegroundNotifications();
     let eventsReady=false,settingsReady=false;
     const markReady=()=>{if(eventsReady&&settingsReady)setSyncStatus(navigator.onLine?"同期済み":"オフライン","offline")};
     unsubscribeEvents=eventRepository.subscribe(items=>{
@@ -109,6 +112,41 @@ $("signOut").onclick=signOutUser;$("deniedSignOut").onclick=signOutUser;
 $("copyUid").onclick=async()=>{
   try{await navigator.clipboard.writeText($("deniedUid").textContent);$("copyStatus").textContent="UIDをコピーしました。"}
   catch{$("copyStatus").textContent="コピーできませんでした。UIDを長押ししてコピーしてください。"}
+};
+
+function isIosDevice(){return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1)}
+function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true}
+async function refreshNotificationUi(){
+  const configured=notificationRepository.isConfigured();
+  const supported=await notificationRepository.isSupported().catch(()=>false);
+  const granted=typeof Notification!=="undefined"&&Notification.permission==="granted";
+  $("notificationButton").textContent=granted?"🔔":"🔕";
+  $("notificationStatus").textContent=!configured?"FirebaseのVAPID公開鍵を設定すると利用できます。":!supported?"このブラウザではプッシュ通知を利用できません。":granted?"この端末では通知が有効です。":"この端末では通知がまだ有効になっていません。";
+  $("enableNotifications").classList.toggle("hidden",granted||!configured||!supported);
+  $("disableNotifications").classList.toggle("hidden",!granted);
+  $("notificationHint").textContent=isIosDevice()&&!isStandalone()?"iPhoneでは、Safariの共有メニューから「ホーム画面に追加」し、追加したアイコンから開いて通知を有効にしてください。":"通知の許可は、このボタンを押したときだけ確認します。";
+}
+function setupForegroundNotifications(){
+  if(foregroundNotificationUnsubscribe||typeof Notification==="undefined"||Notification.permission!=="granted")return;
+  try{foregroundNotificationUnsubscribe=notificationRepository.subscribeForeground(payload=>{
+    const title=payload.data?.title||"うちログ";
+    const body=payload.data?.body||"買い物リストが更新されました";
+    setSyncStatus(`${title}：${body}`);
+    if(document.hidden&&Notification.permission==="granted")new Notification(title,{body,icon:"./icon-192.png"});
+  })}catch(error){console.warn("Foreground notification setup failed",error)}
+}
+$("notificationButton").onclick=async()=>{await refreshNotificationUi();$("notificationError").classList.add("hidden");$("notificationDialog").showModal()};
+$("enableNotifications").onclick=async()=>{
+  $("enableNotifications").disabled=true;$("notificationError").classList.add("hidden");
+  try{await notificationRepository.enable(currentUser.uid);setupForegroundNotifications();await refreshNotificationUi();$("notificationStatus").textContent="通知を有効にしました。"}
+  catch(error){$("notificationError").textContent=`通知を有効にできませんでした：${readableError(error)}`;$("notificationError").classList.remove("hidden")}
+  finally{$("enableNotifications").disabled=false}
+};
+$("disableNotifications").onclick=async()=>{
+  $("disableNotifications").disabled=true;$("notificationError").classList.add("hidden");
+  try{await notificationRepository.disable(currentUser.uid);foregroundNotificationUnsubscribe?.();foregroundNotificationUnsubscribe=null;await refreshNotificationUi();$("notificationStatus").textContent="この端末の通知を停止しました。"}
+  catch(error){$("notificationError").textContent=`通知を停止できませんでした：${readableError(error)}`;$("notificationError").classList.remove("hidden")}
+  finally{$("disableNotifications").disabled=false}
 };
 
 function renderAll(){renderStats();renderFavorites();renderShopping();renderDue();renderEntries();renderCategories();renderLastDone();renderHistory()}
@@ -189,34 +227,48 @@ async function addEntry({item,category,performedAt=isoToday(),interval=null,note
 async function addShopping(item,action="wanted",performedAt=isoToday(),note=""){
   await saveAction(()=>eventRepository.add({item,category:"shopping",action,note,performedAt,interval:null,...userFields()}));
 }
+async function addShoppingItems(items,action="wanted",performedAt=isoToday(),note=""){
+  await saveAction(()=>Promise.all(items.map(item=>eventRepository.add({item,category:"shopping",action,note,performedAt,interval:null,...userFields()}))));
+}
+function parseShoppingItems(value){
+  return [...new Set(String(value).split(/\r?\n|[、,，]+/).map(item=>item.trim()).filter(Boolean))];
+}
 async function markBought(id){await saveAction(()=>eventRepository.update(id,{action:"bought",performedAt:isoToday(),updatedBy:currentUser.uid,updatedByName:currentUser.displayName||currentUser.email||"ユーザー"}))}
 async function removeEvent(id){await saveAction(()=>eventRepository.remove(id))}
 
 function openEntryForm(type,forcedCategory=null){
   $("entryType").value=type;$("entryEditId").value="";$("entryText").value="";$("entryNote").value="";$("entryDate").value=isoToday();$("entryInterval").value="";
   const select=$("entryCategory");select.innerHTML="";Object.entries(categories).filter(([key])=>key!=="shopping").forEach(([key,value])=>select.add(new Option(value.label,key)));if(forcedCategory)select.value=forcedCategory;
-  $("categoryWrap").classList.toggle("hidden",type.startsWith("shopping"));$("intervalWrap").classList.toggle("hidden",type.startsWith("shopping"));
-  const isWant=type==="shopping-want";$("formEyebrow").textContent=type.startsWith("shopping")?"SHOPPING":"HOUSE LOG";$("formTitle").textContent=isWant?"買いたいものを追加":type==="shopping-bought"?"買ったものを記録":"家事の記録を追加";$("entryText").placeholder=isWant?"例：ヨーグルト":type==="shopping-bought"?"例：バナナ":"例：トイレ掃除";
+  const isShopping=type.startsWith("shopping");
+  $("categoryWrap").classList.toggle("hidden",isShopping);$("intervalWrap").classList.toggle("hidden",isShopping);
+  $("entryTextHelp").classList.toggle("hidden",!isShopping);
+  $("entryText").rows=isShopping?4:1;
+  const isWant=type==="shopping-want";$("formEyebrow").textContent=isShopping?"SHOPPING":"HOUSE LOG";$("formTitle").textContent=isWant?"買いたいものを追加":type==="shopping-bought"?"買ったものを記録":"家事の記録を追加";$("entryText").placeholder=isWant?"例：ヨーグルト\n牛乳\nバナナ":type==="shopping-bought"?"例：バナナ\n卵\nパン":"例：トイレ掃除";
   $("entryDialog").showModal();setTimeout(()=>$("entryText").focus(),50);
 }
 function openEditForm(id){
   const source=state.events.find(x=>x.id===id);if(!source)return;
   const type=source.category==="shopping"?(source.action==="wanted"?"shopping-want":"shopping-bought"):"chore";
   openEntryForm(type,source.category);
-  $("entryEditId").value=id;$("entryText").value=source.item;$("entryNote").value=source.note||"";$("entryDate").value=source.performedAt;$("entryInterval").value=source.interval||"";
+  $("entryEditId").value=id;$("entryText").value=source.item;$("entryText").rows=1;$("entryTextHelp").classList.add("hidden");$("entryNote").value=source.note||"";$("entryDate").value=source.performedAt;$("entryInterval").value=source.interval||"";
   if(source.category!=="shopping")$("entryCategory").value=source.category;
   $("formTitle").textContent=source.category==="shopping"?"買い物を編集":"家事の記録を編集";
 }
 document.querySelectorAll(".tab-button").forEach(button=>button.onclick=()=>{document.querySelectorAll(".tab-button,.view").forEach(x=>x.classList.remove("active"));button.classList.add("active");$("view-"+button.dataset.view).classList.add("active")});
 document.querySelectorAll("[data-open-form]").forEach(button=>button.onclick=()=>openEntryForm(button.dataset.openForm));$("openQuickAdd").onclick=()=>openEntryForm("chore");
 $("entryForm").addEventListener("submit",async event=>{
-  event.preventDefault();const type=$("entryType").value,editId=$("entryEditId").value,item=$("entryText").value.trim();if(!item)return;
+  event.preventDefault();
+  const type=$("entryType").value,editId=$("entryEditId").value,item=$("entryText").value.trim();
+  if(!item)return;
+  const note=$("entryNote").value.trim(),performedAt=$("entryDate").value;
   $("entryDialog").close();
   try{
-    if(editId)await saveAction(()=>eventRepository.update(editId,{item,category:type.startsWith("shopping")?"shopping":$("entryCategory").value,action:type==="shopping-want"?"wanted":type==="shopping-bought"?"bought":"done",performedAt:$("entryDate").value,interval:type.startsWith("shopping")?null:($("entryInterval").value?Number($("entryInterval").value):null),note:$("entryNote").value.trim()}));
-    else if(type==="shopping-want")await addShopping(item,"wanted",$("entryDate").value);
-    else if(type==="shopping-bought")await addShopping(item,"bought",$("entryDate").value,$("entryNote").value.trim());
-    else await addEntry({item,category:$("entryCategory").value,performedAt:$("entryDate").value,interval:$("entryInterval").value,note:$("entryNote").value.trim()});
+    if(editId)await saveAction(()=>eventRepository.update(editId,{item,category:type.startsWith("shopping")?"shopping":$("entryCategory").value,action:type==="shopping-want"?"wanted":type==="shopping-bought"?"bought":"done",performedAt,interval:type.startsWith("shopping")?null:($("entryInterval").value?Number($("entryInterval").value):null),note}));
+    else if(type==="shopping-want"||type==="shopping-bought"){
+      const items=parseShoppingItems(item);
+      if(!items.length)return;
+      await addShoppingItems(items,type==="shopping-want"?"wanted":"bought",performedAt,note);
+    }else await addEntry({item,category:$("entryCategory").value,performedAt,interval:$("entryInterval").value,note});
   }catch{}
 });
 document.body.addEventListener("click",async event=>{

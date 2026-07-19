@@ -25,5 +25,8 @@
         ]
       }
     ]
+  },
+  "functions": {
+    "source": "functions"
   }
 }
