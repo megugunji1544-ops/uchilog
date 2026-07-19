@@ -13,5 +13,7 @@
 @media(max-width:560px){.shopping-notice{grid-template-columns:auto 1fr}.shopping-notice .text-button{grid-column:2;justify-self:start;padding:0}.heading-actions{flex-direction:column;align-items:flex-end}.shopping-mode-header{grid-template-columns:auto 1fr}.shopping-mode-count{grid-column:2}.shopping-mode-item{grid-template-columns:34px 1fr}.shopping-mode-item>.new-badge{grid-column:2}.shopping-mode-header .secondary-button{min-height:44px}}
 @media(prefers-reduced-motion:no-preference){.shopping-mode-item{transition:opacity .2s,transform .2s}.shopping-mode-item:active{transform:scale(.985)}}
 .shopping-mode.hidden,.shopping-mode-complete.hidden{display:none}
+.hero-card{background:#fff}.shopping-notice{width:100%;font:inherit;color:var(--ink);text-align:left;background:#fff1f4;cursor:pointer}.shopping-notice:hover{background:#ffe9ee}.shopping-notice:active{transform:scale(.995)}.shopping-notice:focus-visible{outline:3px solid rgba(181,79,98,.28);outline-offset:2px}.shopping-notice-action{color:var(--accent);font-size:12px;font-weight:800;white-space:nowrap}.notice-count{color:#c74343;font-size:1.08em;font-weight:900}
+@media(max-width:560px){.shopping-notice-action{grid-column:2}}
 
 .field-help{display:block;margin-top:-4px;color:var(--muted);font-size:12px;font-weight:500;line-height:1.6}.app-dialog textarea#entryText{resize:vertical;min-height:48px}

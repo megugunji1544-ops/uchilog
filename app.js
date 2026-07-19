@@ -196,7 +196,7 @@ function renderShoppingSummary(){
   const count=wantedItems().length,newCount=newWantedItems().length;
   $("homeShoppingBadge").textContent=count;$("shoppingBadge").textContent=count;
   $("homeShoppingMeta").textContent=shoppingMetaText();$("shoppingMeta").textContent=shoppingMetaText();$("shoppingModeMeta").textContent=shoppingMetaText();
-  $("shoppingNoticeText").textContent=newCount?`相手から新しく${newCount}件追加されています`:count?`買いたいものが${count}件あります`:"現在、買いたいものはありません";
+  $("shoppingNoticeText").innerHTML=newCount?`相手から新しく<span class="notice-count">${newCount}件</span>追加されています`:count?`買いたいものが<span class="notice-count">${count}件</span>あります`:"現在、買いたいものはありません";
   $("shoppingNoticeSubtext").textContent=newCount?`未購入は全部で${count}件です`:"";
 }
 function renderShoppingMode(){

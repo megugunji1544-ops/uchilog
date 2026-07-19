@@ -1,4 +1,4 @@
-const CACHE="uchilog-v1.3.0";
+const CACHE="uchilog-v1.3.1";
 const ASSETS=["./","./index.html","./styles.css","./app.js","./repositories.js","./firebase-config.js","./manifest.webmanifest","./icon-192.png","./icon-512.png"];
 
 self.addEventListener("install",event=>{

@@ -1,4 +1,4 @@
-# うちログ Firebase共有版 v1.3.0
+# うちログ Firebase共有版 v1.3.1
 
 夫婦2人で家事・買い物をリアルタイム共有する静的Webアプリです。Firebase AuthenticationのGoogleログインとCloud Firestoreを使用します。
 
@@ -181,7 +181,7 @@ firebase deploy --only hosting,firestore:rules
 
 ### GitHub Pagesへ反映する場合
 
-1. `uchilog_firebase_v1.3.0.zip`を展開
+1. `uchilog_firebase_v1.3.1.zip`を展開
 2. 展開したファイルをGitHub Pagesの公開元へ上書き（`functions/`や`node_modules/`は不要）
 3. `firebase-config.js` が本番設定になっていることを確認
 4. Gitで変更をコミットしてpush
@@ -191,7 +191,7 @@ firebase deploy --only hosting,firestore:rules
 8. iPhone Safariではページを閉じて開き直す
 9. ホーム画面追加版はアプリを完全に終了して再度起動し、変わらなければSafariで公開URLを一度開いてから再起動
 
-Service Workerのキャッシュ名は `uchilog-v1.3.0` です。更新版はインストール時に待機をスキップし、activate時に旧キャッシュを削除して既存ページを制御します。
+Service Workerのキャッシュ名は `uchilog-v1.3.1` です。更新版はインストール時に待機をスキップし、activate時に旧キャッシュを削除して既存ページを制御します。
 
 ## 動作確認
 
@@ -227,6 +227,14 @@ Service Workerのキャッシュ名は `uchilog-v1.3.0` です。更新版はイ
 ## 将来、家庭グループ方式へ変更する場合
 
 `households/{householdId}` とメンバー情報を追加し、events/settingsを家庭配下へ移します。主な変更箇所は `repositories.js` のコレクションパス、`firestore.rules` の所属判定、`accessRepository` の許可モデル、ログイン後の家庭選択UI、localStorage移行先です。UI側はRepository APIを維持すれば変更を最小化できます。
+
+## v1.3.1 変更点
+
+- 買い物案内カード全体をタップして買い物モードを開けるよう変更
+- 「今日の家」カードを白背景へ変更
+- 買い物案内カードを淡いピンク背景へ変更
+- 買いたいもの件数を赤色で強調
+- キャッシュ名を`uchilog-v1.3.1`へ更新
 
 ## v1.3.0 変更点
 
