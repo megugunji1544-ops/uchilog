@@ -17,6 +17,7 @@ let currentUser=null,currentHistoryFilter="all",receiptItems=[],receiptFile=null
 let unsubscribeEvents=null,unsubscribeSettings=null,unsubscribeAccess=null,authGeneration=0,signInInProgress=false;
 let shoppingSeenTimer=null,startupRendered=false,userStateInitializationError=null;
 const shoppingPendingIds=new Set();
+const stockPendingIds=new Set();
 
 const $=id=>document.getElementById(id);
 const showOnly=id=>["authLoadingScreen","loginScreen","unauthorizedScreen","appShell"].forEach(x=>$(x).classList.toggle("hidden",x!==id));
@@ -51,7 +52,7 @@ async function saveAction(action){
 }
 function stopDataSubscriptions(){
   unsubscribeEvents?.();unsubscribeSettings?.();unsubscribeAccess?.();unsubscribeEvents=null;unsubscribeSettings=null;unsubscribeAccess=null;
-  clearTimeout(shoppingSeenTimer);shoppingSeenTimer=null;shoppingPendingIds.clear();startupRendered=false;userStateInitializationError=null;
+  clearTimeout(shoppingSeenTimer);shoppingSeenTimer=null;shoppingPendingIds.clear();stockPendingIds.clear();startupRendered=false;userStateInitializationError=null;
   $("shoppingMode")?.classList.add("hidden");document.body.classList.remove("shopping-mode-open");
   state={events:[],settings:{householdName:"我が家",quickItems:[]},userState:{shoppingLastSeenAt:null}};
 }
@@ -134,7 +135,7 @@ function newWantedItems(){
   return wantedItems().filter(item=>item.createdBy!==currentUser?.uid&&eventTime(item)>seen);
 }
 function isNewShoppingItem(item){return newWantedItems().some(candidate=>candidate.id===item.id)}
-function renderAll(){renderStats();renderFavorites();renderShopping();renderShoppingSummary();renderShoppingMode();renderDue();renderEntries();renderCategories();renderLastDone();renderHistory()}
+function renderAll(){renderStats();renderFavorites();renderShopping();renderShoppingSummary();renderShoppingMode();renderStock();renderDue();renderEntries();renderCategories();renderLastDone();renderHistory()}
 function renderStats(){
   $("todayLabel").textContent=new Intl.DateTimeFormat("ja-JP",{month:"long",day:"numeric",weekday:"short"}).format(new Date());
   $("shoppingCount").textContent=wantedItems().length;
@@ -164,6 +165,35 @@ function renderShopping(){
   const bought=$("purchasedList");bought.innerHTML="";
   shopping().filter(x=>x.action==="bought").slice(0,20).forEach(x=>bought.appendChild(timelineNode(x,true)));
   if(!bought.children.length)bought.appendChild(emptyNode());
+}
+const normalizeStockName=value=>String(value||"").trim().toLocaleLowerCase("ja-JP");
+function stockItems(){
+  const unique=new Map();
+  shopping().filter(item=>item.action==="bought").forEach(item=>{
+    const key=normalizeStockName(item.item);if(key&&!unique.has(key))unique.set(key,item);
+  });
+  return[...unique.values()].sort((a,b)=>String(a.item).localeCompare(String(b.item),"ja"));
+}
+function renderStock(){
+  const items=stockItems(),wantedNames=new Set(wantedItems().map(item=>normalizeStockName(item.item)));
+  $("stockCount").textContent=items.length;$("stockList").innerHTML="";
+  items.forEach(item=>{
+    const key=normalizeStockName(item.item),alreadyWanted=wantedNames.has(key),saving=stockPendingIds.has(item.id);
+    const card=document.createElement("article");card.className="stock-card";
+    const buyerName=item.updatedByName||item.createdByName;
+    card.innerHTML=`<div><h3>${escapeHtml(item.item)}</h3><p>最後に購入：${fmtDate(item.performedAt)}${buyerName?`・${escapeHtml(buyerName)}`:""}</p></div><button type="button" class="stock-toggle${alreadyWanted?" added":""}${saving?" saving":""}" data-stock-out="${item.id}" ${alreadyWanted||saving?"disabled":""}><span class="stock-toggle-box" aria-hidden="true"></span><span>${saving?"追加中…":alreadyWanted?"買うものに追加済み":"在庫切れ"}</span></button>`;
+    $("stockList").appendChild(card);
+  });
+  if(!items.length)$("stockList").appendChild(emptyNode());
+}
+async function addStockToShopping(id){
+  if(stockPendingIds.has(id))return;
+  const source=stockItems().find(item=>item.id===id);if(!source)return;
+  if(wantedItems().some(item=>normalizeStockName(item.item)===normalizeStockName(source.item)))return;
+  stockPendingIds.add(id);$("stockError").classList.add("hidden");renderStock();
+  try{await addShopping(source.item,"wanted",isoToday(),"おうちストックから追加")}
+  catch(error){$("stockError").textContent="買い物リストへ追加できませんでした。通信状態を確認して、もう一度お試しください。";$("stockError").classList.remove("hidden");console.error(error)}
+  finally{stockPendingIds.delete(id);renderStock()}
 }
 function latestShoppingActivity(){
   const settingsTime=timestampMillis(state.settings.shoppingLastUpdatedAt);
@@ -335,6 +365,7 @@ document.body.addEventListener("click",async event=>{
   try{
     if(target.dataset.closeDialog){$(target.dataset.closeDialog)?.close();return}
     if(target.dataset.shoppingModeBuy)await completeShoppingModeItem(target.dataset.shoppingModeBuy);
+    if(target.dataset.stockOut)await addStockToShopping(target.dataset.stockOut);
     if(target.dataset.buy)await markBought(target.dataset.buy);
     if(target.dataset.edit)openEditForm(target.dataset.edit);
     if(target.dataset.removeShop&&confirm("この買い物項目を削除しますか？"))await removeEvent(target.dataset.removeShop);

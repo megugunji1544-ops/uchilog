@@ -69,6 +69,7 @@
     <nav class="tabbar" aria-label="メインメニュー">
       <button class="tab-button active" data-view="home">ホーム</button>
       <button class="tab-button" data-view="shopping">買い物</button>
+      <button class="tab-button" data-view="stock">ストック</button>
       <button class="tab-button" data-view="chores">家事</button>
       <button class="tab-button" data-view="history">履歴</button>
     </nav>
@@ -140,6 +141,17 @@
       <section class="section-block">
         <div class="section-heading"><div><p class="eyebrow">PURCHASED</p><h2>最近買ったもの</h2></div></div>
         <div id="purchasedList" class="timeline"></div>
+      </section>
+    </section>
+
+    <section id="view-stock" class="view">
+      <section class="section-block">
+        <div class="stock-hero">
+          <div><p class="eyebrow">HOME STOCK</p><h2>おうちストック <span id="stockCount" class="count-badge">0</span></h2><p>これまでに買ったものをまとめています。在庫が切れたら、買い物リストへ戻せます。</p></div>
+          <span aria-hidden="true">🏠</span>
+        </div>
+        <p id="stockError" class="error-message hidden" role="alert"></p>
+        <div id="stockList" class="stock-list"></div>
       </section>
     </section>
 

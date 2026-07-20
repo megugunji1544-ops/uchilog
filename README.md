@@ -1,4 +1,4 @@
-# うちログ Firebase共有版 v1.3.1
+# うちログ Firebase共有版 v1.4.0
 
 夫婦2人で家事・買い物をリアルタイム共有する静的Webアプリです。Firebase AuthenticationのGoogleログインとCloud Firestoreを使用します。
 
@@ -14,6 +14,7 @@
 - 未購入件数、新着商品、買い物リストの最終更新者・相対時刻表示
 - スーパー向けの全画面「買い物モード」
 - アプリ起動時の買い物状況案内
+- 購入履歴を商品ごとにまとめ、在庫切れを買い物リストへ戻せる「おうちストック」
 
 ## ファイル構成
 
@@ -181,7 +182,7 @@ firebase deploy --only hosting,firestore:rules
 
 ### GitHub Pagesへ反映する場合
 
-1. `uchilog_firebase_v1.3.1.zip`を展開
+1. `uchilog_firebase_v1.4.0.zip`を展開
 2. 展開したファイルをGitHub Pagesの公開元へ上書き（`functions/`や`node_modules/`は不要）
 3. `firebase-config.js` が本番設定になっていることを確認
 4. Gitで変更をコミットしてpush
@@ -191,7 +192,7 @@ firebase deploy --only hosting,firestore:rules
 8. iPhone Safariではページを閉じて開き直す
 9. ホーム画面追加版はアプリを完全に終了して再度起動し、変わらなければSafariで公開URLを一度開いてから再起動
 
-Service Workerのキャッシュ名は `uchilog-v1.3.1` です。更新版はインストール時に待機をスキップし、activate時に旧キャッシュを削除して既存ページを制御します。
+Service Workerのキャッシュ名は `uchilog-v1.4.0` です。更新版はインストール時に待機をスキップし、activate時に旧キャッシュを削除して既存ページを制御します。
 
 ## 動作確認
 
@@ -227,6 +228,16 @@ Service Workerのキャッシュ名は `uchilog-v1.3.1` です。更新版はイ
 ## 将来、家庭グループ方式へ変更する場合
 
 `households/{householdId}` とメンバー情報を追加し、events/settingsを家庭配下へ移します。主な変更箇所は `repositories.js` のコレクションパス、`firestore.rules` の所属判定、`accessRepository` の許可モデル、ログイン後の家庭選択UI、localStorage移行先です。UI側はRepository APIを維持すれば変更を最小化できます。
+
+## v1.4.0 変更点
+
+- 「ストック」タブと「おうちストック」ページを追加
+- 購入済み履歴を商品名ごとにまとめ、最後の購入日と購入者を表示
+- 「在庫切れ」を押すと、その商品を買いたいものへ再追加
+- すでに買いたいものにある商品は「買うものに追加済み」と表示し、重複登録を防止
+- 追加処理中の連続タップを防止し、失敗時は日本語エラーを表示
+- 新しいコレクションやFirestore Rules変更なし
+- キャッシュ名を`uchilog-v1.4.0`へ更新
 
 ## v1.3.1 変更点
 
